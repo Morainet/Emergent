@@ -11,6 +11,7 @@ const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 
 var player: CharacterBody3D
+var player_visual: ExplorerAvatar
 var camera: Camera3D
 var camera_yaw := 0.0
 var camera_pitch := 0.53
@@ -101,6 +102,7 @@ func _physics_process(delta: float) -> void:
 	was_night = _is_night()
 	_update_daylight(delta)
 	_move_player(delta)
+	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4)
 	_update_wolves(delta)
 	_animate_collectibles(delta)
 	_update_camera(delta)
@@ -307,9 +309,9 @@ func _make_player() -> void:
 	capsule.height = 1.8
 	shape.shape = capsule
 	player.add_child(shape)
-	_cylinder(player, 0.42, 0.82, Vector3(0.0, -0.2, 0.0), Color("65bdb5"))
-	_sphere(player, 0.37, Vector3(0.0, 0.54, 0.0), Color("e9c49b"))
-	_box(player, Vector3(0.8, 0.55, 0.26), Vector3(0.0, -0.12, 0.3), Color("4f8b85"))
+	player_visual = ExplorerAvatar.new()
+	player_visual.name = "ExplorerAvatar"
+	player.add_child(player_visual)
 
 
 func _make_wolves() -> void:
