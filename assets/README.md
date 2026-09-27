@@ -1,6 +1,6 @@
 # 游戏素材
 
-以下 PNG 使用 Codex 内置 `image_gen` 生成。地表、树冠、石材、角色外套材质和 HUD 图标已接入 3D 主场景。角色概念图仍是建模参考；当前主角与营地同伴 Ari 共用 `scripts/explorer_avatar.gd` 的程序化几何体，以不同材质和配色区分，而不是直接加载概念图作为 3D 模型。无外部图库素材。
+以下 PNG 使用 Codex 内置 `image_gen` 生成；狼的 GLB 则由 Godot 原生网格代码生成并导出，并非图片转 3D。地表、树冠、石材、角色外套材质和 HUD 图标已接入 3D 主场景。角色概念图仍是建模参考；当前主角与营地同伴 Ari 共用 `scripts/explorer_avatar.gd` 的程序化几何体，以不同材质和配色区分，而不是直接加载概念图作为 3D 模型。无外部图库素材。
 
 | 文件 | 用途 |
 | --- | --- |
@@ -11,6 +11,7 @@
 | `textures/pine_canopy.png` | 松树树冠针叶纹理 |
 | `characters/explorer_canvas.png` | 主角青色外套织物纹理 |
 | `characters/ari_canvas.png` | Ari 暖棕色外套织物纹理 |
+| `models/wolf_lowpoly.glb` | Godot 原生网格生成的静态低多边形狼模型，可独立预览；游戏内动画由 `scenes/wolf_avatar.tscn` 驱动 |
 | `ui/signal_shard.png` | HUD 三格信号石收集指示，透明背景 |
 | `characters/explorer_concept.png` | 主角完整服装与气质设定图 |
 | `characters/explorer_lowpoly_reference.png` | 与 Demo 风格更接近的低多边形角色建模参考 |

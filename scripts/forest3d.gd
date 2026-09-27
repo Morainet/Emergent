@@ -13,6 +13,7 @@ const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
 const MOSS_BARK_TEXTURE = preload("res://assets/textures/moss_bark.png")
 const PINE_CANOPY_TEXTURE = preload("res://assets/textures/pine_canopy.png")
+const WOLF_MODEL = preload("res://scenes/wolf_avatar.tscn")
 const CROWN_RING_HEIGHTS = [-0.5, -0.36, -0.08, 0.22, 0.5]
 const CROWN_RING_RADII = [0.78, 1.0, 0.72, 0.42, 0.035]
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
@@ -773,8 +774,7 @@ func _make_wolves() -> void:
 		capsule.height = 1.2
 		shape.shape = capsule
 		wolf.add_child(shape)
-		var visual := WolfAvatar.new()
-		visual.name = "WolfAvatar"
+		var visual: WolfAvatar = WOLF_MODEL.instantiate()
 		wolf.add_child(visual)
 		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "eyes": visual.eyes, "mood_marker": visual.mood_marker, "visual": visual})
 

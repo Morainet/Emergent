@@ -198,6 +198,16 @@ func _run() -> void:
 	var wolves: Array = game.get("wolves")
 	var alpha_data: Dictionary = wolves[0]
 	var wolf_visual: WolfAvatar = alpha_data["visual"]
+	assert(wolf_visual.scene_file_path == "res://scenes/wolf_avatar.tscn", "The game should instantiate the reusable wolf model scene")
+	assert(wolf_visual.get_node("Body").mesh is ArrayMesh and wolf_visual.get_node("Head/Muzzle").mesh is ArrayMesh, "Wolf torso and muzzle should be modeled meshes, not boxes")
+	assert(wolf_visual.get_node("FrontLeftLeg/LegAndPaw").mesh is ArrayMesh and wolf_visual.get_node("Tail/TailFur").mesh is ArrayMesh, "Wolf legs and tail should have shaped mesh geometry")
+	assert(_count_box_meshes(wolf_visual) == 1, "Only the floating status marker may remain box-shaped")
+	var exported_wolf: PackedScene = load("res://assets/models/wolf_lowpoly.glb")
+	assert(exported_wolf != null, "The standalone wolf GLB should import")
+	var exported_instance := exported_wolf.instantiate()
+	assert(_count_meshes(exported_instance) >= 10, "The exported GLB should contain the full wolf mesh")
+	assert(_count_box_meshes(exported_instance) == 0, "The standalone wolf model should contain no box primitives")
+	exported_instance.free()
 	assert(wolf_visual.get_node("FrontLeftLeg") != null and wolf_visual.get_node("RearRightLeg") != null, "Wolf should have animated front and rear legs")
 	wolf_visual.animate(4.8, "hunt", false, 0.1)
 	assert(absf(wolf_visual.get_node("FrontLeftLeg").rotation.x) > 0.2, "Running wolf should have a clear gait")
@@ -287,3 +297,17 @@ func _run() -> void:
 	assert(alpha_data["hp"] == 3 and alpha.visible and is_zero_approx(wolf_visual.attack_time), "Night respawn should restore the wolf and reset its animation")
 	print("SMOKE TEST PASSED: Ari companion, signal scanner, pulse feedback, wolf avatar, textures, HUD icons, movement, collection, ward, victory, wolf decisions")
 	quit(0)
+
+
+func _count_meshes(node: Node) -> int:
+	var count := 1 if node is MeshInstance3D else 0
+	for child in node.get_children():
+		count += _count_meshes(child)
+	return count
+
+
+func _count_box_meshes(node: Node) -> int:
+	var count := 1 if node is MeshInstance3D and node.mesh is BoxMesh else 0
+	for child in node.get_children():
+		count += _count_box_meshes(child)
+	return count
