@@ -37,6 +37,10 @@ func _run() -> void:
 		assert((arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].x > 0.0, "%s should face outwards" % mesh_path)
 	assert(ari.get_node("AriAvatar/CapCrown") != null and ari.get_node("AriAvatar/Scarf") != null, "Ari should have a distinct ranger silhouette")
 	assert(avatar.get_node("HairTuft") != null and avatar.get_node("SignalPendant") != null, "Explorer hair and signal pendant should be modelled")
+	assert(avatar.get_node("SignalPendant").scale.y < 0.1, "Signal pendant should keep its small modelled size after movement")
+	avatar.call("animate", 0.0, 0.0, 1.0)
+	assert(avatar.get_node("SignalPendant").scale.y < 0.16, "Pulse must enlarge the pendant only relative to its original size")
+	assert(ari.get_node("AriAvatar/SignalPendant").scale.y < 0.1, "Ari's pendant should also start at its modelled size")
 	for asset in ["res://assets/models/explorer_lowpoly.glb", "res://assets/models/ari_lowpoly.glb"]:
 		var imported_scene: PackedScene = load(asset)
 		assert(imported_scene != null, "%s should import as a standalone GLB scene" % asset)

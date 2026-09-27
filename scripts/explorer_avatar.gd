@@ -16,6 +16,7 @@ var right_leg: Node3D
 var left_arm: Node3D
 var right_arm: Node3D
 var pendant: MeshInstance3D
+var pendant_base_scale := Vector3.ONE
 var satchel: Node3D
 var action_name := ""
 var action_time := 0.0
@@ -74,7 +75,7 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 	scale = Vector3(1.0 + squash * 0.5, 1.0 - squash, 1.0 + squash * 0.5)
 	position.y = absf(sin(cadence)) * 0.035 * stride + sin(walk_time * 2.2) * 0.008 * (1.0 - stride)
 	satchel.rotation.z = sin(cadence) * 0.08 * stride
-	pendant.scale = Vector3.ONE * (1.0 + pulse * 0.65)
+	pendant.scale = pendant_base_scale * (1.0 + pulse * 0.65)
 
 
 func _build() -> void:
@@ -143,6 +144,7 @@ func _build() -> void:
 	_polygon(satchel, "BagFlap", [Vector3(-0.16, 0.12, 0.115), Vector3(0.16, 0.12, 0.115), Vector3(0.13, -0.035, 0.118), Vector3(-0.13, -0.035, 0.118)], coat_light)
 	_ellipsoid(satchel, "BagClasp", Vector3(0.0, -0.02, 0.128), Vector3(0.035, 0.04, 0.015), Color("c7a86c"))
 	pendant = _ellipsoid(self, "SignalPendant", Vector3(0.0, 0.245, -0.254), Vector3(0.055, 0.09, 0.035), accent, true)
+	pendant_base_scale = pendant.scale
 	pendant.rotation.z = PI / 4.0
 
 
