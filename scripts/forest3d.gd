@@ -261,11 +261,35 @@ func _make_ground() -> void:
 		var z := -29.0 + float((i * 31) % 58)
 		if Vector2(x, z).length() < 7.0:
 			continue
-		_box(self, Vector3(0.6 + float(i % 3), 0.02, 0.5 + float(i % 4)), Vector3(x, 0.02, z), Color("3d604b") if i % 2 == 0 else Color("385b4a"))
+		_ground_moss_patch(Vector2(x, z), 0.8 + float(i % 4) * 0.37, i)
 	for i in 19:
 		var angle := float(i) * TAU / 19.0
 		var p := Vector3(cos(angle) * 30.0, 1.1, sin(angle) * 30.0)
 		_box(self, Vector3(3.0, 2.2, 1.0), p, Color("425b58"))
+
+
+func _ground_moss_patch(center: Vector2, radius: float, variation: int) -> void:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for spoke in 9:
+		var angle_a := float(spoke) * TAU / 9.0
+		var angle_b := float(spoke + 1) * TAU / 9.0
+		var radius_a := radius * (0.75 + 0.2 * sin(float(variation + spoke) * 2.17))
+		var radius_b := radius * (0.75 + 0.2 * sin(float(variation + spoke + 1) * 2.17))
+		var a := center + Vector2(cos(angle_a), sin(angle_a)) * radius_a
+		var b := center + Vector2(cos(angle_b), sin(angle_b)) * radius_b
+		_trail_vertex(tool, Vector3(center.x, 0.012, center.y), Vector2(0.5, 0.5), 0.36)
+		_trail_vertex(tool, Vector3(a.x, 0.012, a.y), Vector2.ZERO, 0.0)
+		_trail_vertex(tool, Vector3(b.x, 0.012, b.y), Vector2.ONE, 0.0)
+	var patch := MeshInstance3D.new()
+	patch.mesh = tool.commit()
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color("305b44") if variation % 2 == 0 else Color("486a4e")
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	patch.material_override = material
+	add_child(patch)
 
 
 func _make_forest() -> void:
@@ -287,20 +311,60 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 	var trunk := StaticBody3D.new()
 	trunk.position = pos + Vector3(0.0, height * 0.42, 0.0)
 	add_child(trunk)
-	_cylinder(trunk, 0.27, height * 0.84, Vector3.ZERO, Color.WHITE).material_override = _textured_material(MOSS_BARK_TEXTURE)
+	var trunk_mesh := CylinderMesh.new()
+	trunk_mesh.bottom_radius = 0.37 + float(index % 3) * 0.025
+	trunk_mesh.top_radius = 0.15
+	trunk_mesh.height = height * 0.84
+	trunk_mesh.radial_segments = 9
+	var trunk_visual := MeshInstance3D.new()
+	trunk_visual.mesh = trunk_mesh
+	trunk_visual.material_override = _textured_material(MOSS_BARK_TEXTURE)
+	trunk.add_child(trunk_visual)
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.32
+	shape.radius = 0.4
 	shape.height = height * 0.84
 	collision.shape = shape
 	trunk.add_child(collision)
-	var green := Color("447b65") if index % 3 == 0 else Color("386a60")
-	for canopy in [
-		_cone(self, 1.5, 2.8, pos + Vector3(0.0, height + 0.1, 0.0), green),
-		_cone(self, 1.1, 2.2, pos + Vector3(0.0, height + 1.1, 0.0), green.lightened(0.1)),
-		_cone(self, 0.65, 1.7, pos + Vector3(0.0, height + 2.0, 0.0), green.lightened(0.16))
-	]:
-		canopy.material_override = _textured_material(PINE_CANOPY_TEXTURE)
+	var lean := Vector2(sin(float(index) * 2.7), cos(float(index) * 1.9)) * 0.24
+	for tier in 4:
+		var radius := (1.55 - float(tier) * 0.28) * (0.88 + 0.06 * float((index + tier) % 4))
+		var crown := _pine_crown(pos + Vector3(lean.x * float(tier) * 0.42, height - 0.15 + float(tier) * 0.82, lean.y * float(tier) * 0.42), radius, 2.2 - float(tier) * 0.16, index + tier)
+		add_child(crown)
+	for branch in 5:
+		var angle := float(branch) * TAU / 5.0 + float(index) * 1.37
+		var start := pos + Vector3(0.0, height * (0.61 + float(branch % 3) * 0.11), 0.0)
+		var reach := 0.95 + 0.16 * float((index + branch) % 3)
+		var tip := start + Vector3(cos(angle) * reach, 0.28 + float(branch % 2) * 0.12, sin(angle) * reach)
+		var branch_mesh := CylinderMesh.new()
+		branch_mesh.bottom_radius = 0.11
+		branch_mesh.top_radius = 0.045
+		branch_mesh.height = start.distance_to(tip)
+		branch_mesh.radial_segments = 6
+		var branch_visual := MeshInstance3D.new()
+		branch_visual.mesh = branch_mesh
+		branch_visual.position = (start + tip) * 0.5
+		branch_visual.quaternion = Quaternion(Vector3.UP, (tip - start).normalized())
+		branch_visual.material_override = _textured_material(MOSS_BARK_TEXTURE)
+		add_child(branch_visual)
+		add_child(_pine_crown(tip + Vector3(0.0, 0.34, 0.0), 0.55, 1.0, index + branch))
+
+
+func _pine_crown(pos: Vector3, radius: float, height: float, variation: int) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.bottom_radius = radius
+	mesh.top_radius = 0.03
+	mesh.height = height
+	mesh.radial_segments = 7 + variation % 3
+	var crown := MeshInstance3D.new()
+	crown.mesh = mesh
+	crown.position = pos
+	crown.rotation.y = float(variation) * 0.71
+	crown.rotation.z = sin(float(variation) * 1.9) * 0.055
+	var material := _textured_material(PINE_CANOPY_TEXTURE)
+	material.albedo_color = Color(0.86, 0.95, 0.88) if variation % 3 == 0 else Color(1.0, 0.97, 0.91)
+	crown.material_override = material
+	return crown
 
 
 func _make_ruins() -> void:
@@ -347,18 +411,109 @@ func _make_map_details() -> void:
 		PackedVector2Array([Vector2.ZERO, Vector2(7, -4), Vector2(14, -10), Vector2(22, -20)]),
 		PackedVector2Array([Vector2.ZERO, Vector2(7, 4), Vector2(12, 8), Vector2(15, 15), Vector2(19, 21)])
 	]
-	for path in trail_paths:
-		for i in range(path.size() - 1):
-			var start: Vector2 = path[i]
-			var finish: Vector2 = path[i + 1]
-			var direction := finish - start
-			var trail := _box(map_details, Vector3(1.65, 0.035, direction.length() + 0.25), Vector3((start.x + finish.x) * 0.5, 0.048, (start.y + finish.y) * 0.5), Color("756c56"))
-			trail.rotation.y = atan2(direction.x, direction.y)
-			trail.material_override = _textured_material(TRAIL_EARTH_TEXTURE, Vector3(1.0, direction.length() / 3.0, 1.0))
+	for i in trail_paths.size():
+		_make_trail_ribbon(trail_paths[i], i)
+	_dress_trail_edges()
 	_make_site_landmarks()
 	_make_den_markers()
 	_make_forest_props()
 	_scatter_undergrowth()
+
+
+func _make_trail_ribbon(path: PackedVector2Array, route_index: int) -> void:
+	var points: Array[Vector2] = []
+	for segment in range(path.size() - 1):
+		var p0: Vector2 = path[maxi(0, segment - 1)]
+		var p1: Vector2 = path[segment]
+		var p2: Vector2 = path[segment + 1]
+		var p3: Vector2 = path[mini(path.size() - 1, segment + 2)]
+		for step in 5:
+			var t := float(step) / 5.0
+			var t2 := t * t
+			var t3 := t2 * t
+			var point := 0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+			var direction := (p2 - p1).normalized()
+			var sideways := Vector2(-direction.y, direction.x)
+			point += sideways * sin(t * PI) * sin(float(segment * 5 + step) * 1.2 + float(route_index)) * 0.16
+			points.append(point)
+	points.append(path[path.size() - 1])
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var distance := 0.0
+	var offsets := [-1.0, -0.72, 0.0, 0.72, 1.0]
+	var opacity := [0.0, 0.9, 1.0, 0.9, 0.0]
+	for i in range(points.size() - 1):
+		var forward := (points[mini(points.size() - 1, i + 1)] - points[maxi(0, i - 1)]).normalized()
+		var next_forward := (points[mini(points.size() - 1, i + 2)] - points[i]).normalized()
+		var side := Vector2(-forward.y, forward.x)
+		var next_side := Vector2(-next_forward.y, next_forward.x)
+		var next_distance := distance + points[i].distance_to(points[i + 1])
+		var width := 1.15 + 0.17 * sin(float(i) * 0.72 + float(route_index))
+		var next_width := 1.15 + 0.17 * sin(float(i + 1) * 0.72 + float(route_index))
+		for lane in 4:
+			var a := Vector3(points[i].x + side.x * offsets[lane] * width, 0.053, points[i].y + side.y * offsets[lane] * width)
+			var b := Vector3(points[i + 1].x + next_side.x * offsets[lane] * next_width, 0.053, points[i + 1].y + next_side.y * offsets[lane] * next_width)
+			var c := Vector3(points[i].x + side.x * offsets[lane + 1] * width, 0.053, points[i].y + side.y * offsets[lane + 1] * width)
+			var d := Vector3(points[i + 1].x + next_side.x * offsets[lane + 1] * next_width, 0.053, points[i + 1].y + next_side.y * offsets[lane + 1] * next_width)
+			_trail_vertex(tool, a, Vector2((offsets[lane] + 1.0) * 0.5, distance / 3.0), opacity[lane])
+			_trail_vertex(tool, b, Vector2((offsets[lane] + 1.0) * 0.5, next_distance / 3.0), opacity[lane])
+			_trail_vertex(tool, c, Vector2((offsets[lane + 1] + 1.0) * 0.5, distance / 3.0), opacity[lane + 1])
+			_trail_vertex(tool, c, Vector2((offsets[lane + 1] + 1.0) * 0.5, distance / 3.0), opacity[lane + 1])
+			_trail_vertex(tool, b, Vector2((offsets[lane] + 1.0) * 0.5, next_distance / 3.0), opacity[lane])
+			_trail_vertex(tool, d, Vector2((offsets[lane + 1] + 1.0) * 0.5, next_distance / 3.0), opacity[lane + 1])
+		distance = next_distance
+	var trail := MeshInstance3D.new()
+	trail.name = "TrailRibbon%d" % route_index
+	trail.mesh = tool.commit()
+	var material := _textured_material(TRAIL_EARTH_TEXTURE)
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	trail.material_override = material
+	map_details.add_child(trail)
+
+
+func _trail_vertex(tool: SurfaceTool, position: Vector3, uv: Vector2, alpha: float) -> void:
+	tool.set_uv(uv)
+	tool.set_color(Color(1.0, 1.0, 1.0, alpha))
+	tool.set_normal(Vector3.UP)
+	tool.add_vertex(position)
+
+
+func _dress_trail_edges() -> void:
+	var random := RandomNumberGenerator.new()
+	random.seed = 1841
+	for path in trail_paths:
+		for segment in range(path.size() - 1):
+			var start: Vector2 = path[segment]
+			var finish: Vector2 = path[segment + 1]
+			var direction := (finish - start).normalized()
+			var side := Vector2(-direction.y, direction.x)
+			var samples := maxi(2, roundi(start.distance_to(finish) / 2.2))
+			for i in samples:
+				var t := (float(i) + random.randf_range(0.2, 0.8)) / float(samples)
+				var center := start.lerp(finish, t)
+				for sign_side in [-1.0, 1.0]:
+					if random.randf() > 0.72:
+						continue
+					var p: Vector2 = center + side * float(sign_side) * random.randf_range(1.28, 1.82)
+					if p.length() < 6.8:
+						continue
+					var blocked := false
+					for tree in forest_tree_positions:
+						if p.distance_to(tree) < 1.05:
+							blocked = true
+					for site in SHARD_SITES:
+						if p.distance_to(Vector2(site.x, site.z)) < 3.0:
+							blocked = true
+					if blocked:
+						continue
+					if random.randf() < 0.25:
+						var stone := _box(map_details, Vector3(0.3, 0.12, 0.27), Vector3(p.x, 0.07, p.y), Color("777b6a"))
+						stone.rotation.y = random.randf_range(0.0, TAU)
+					else:
+						var height := random.randf_range(0.2, 0.48)
+						_cone(map_details, 0.18, height, Vector3(p.x, height * 0.5, p.y), Color("688765"))
 
 
 func _make_site_landmarks() -> void:

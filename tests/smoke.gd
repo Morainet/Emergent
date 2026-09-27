@@ -57,10 +57,16 @@ func _run() -> void:
 	var ground_mesh: MeshInstance3D = ground.get_child(0)
 	assert(ground_mesh.material_override.albedo_texture != null, "Forest ground texture should load")
 	var textured_canopy_count := 0
+	var tapered_trunk_count := 0
 	for world_child in game.get_children():
 		if world_child is MeshInstance3D and world_child.material_override.albedo_texture == load("res://assets/textures/pine_canopy.png"):
 			textured_canopy_count += 1
-	assert(textured_canopy_count >= 60, "Each pine canopy layer should use the foliage texture")
+		if world_child is StaticBody3D and world_child.get_child_count() > 0 and world_child.get_child(0) is MeshInstance3D:
+			var trunk_mesh = world_child.get_child(0).mesh
+			if trunk_mesh is CylinderMesh and trunk_mesh.bottom_radius > trunk_mesh.top_radius:
+				tapered_trunk_count += 1
+	assert(textured_canopy_count >= 160, "Trees should have layered, textured crowns and side branches")
+	assert(tapered_trunk_count == 20, "Every tree should have a tapered trunk")
 	var paths: Array = game.get("trail_paths")
 	var sites: Array = game.get_script().get_script_constant_map()["SHARD_SITES"]
 	var trees: Array = game.get("forest_tree_positions")
@@ -78,11 +84,22 @@ func _run() -> void:
 	var details: Node3D = game.get("map_details")
 	assert(details.name == "MapDetails" and details.get_child_count() > 100, "Map landmarks and undergrowth should be present")
 	var textured_trail := false
+	var ribbon_count := 0
 	for detail in details.get_children():
 		assert(detail is MeshInstance3D, "Map dressing must not introduce collision bodies")
 		if detail.material_override is StandardMaterial3D and detail.material_override.albedo_texture == load("res://assets/textures/trail_earth.png"):
 			textured_trail = true
+			assert(detail.mesh is ArrayMesh and detail.material_override.vertex_color_use_as_albedo, "Trails should be blended ribbon meshes")
+			var colors: PackedColorArray = detail.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+			var has_soft_edge := false
+			for color in colors:
+				if color.a < 0.1:
+					has_soft_edge = true
+					break
+			assert(has_soft_edge, "Trail edges should fade into the forest floor")
+			ribbon_count += 1
 	assert(textured_trail, "A trail should use the new earth texture")
+	assert(ribbon_count == 3, "Each destination should have one continuous trail ribbon")
 	var icons: Array = game.get("shard_icons")
 	assert(icons.size() == 3, "HUD should show three signal stone icons")
 	assert(icons[0].texture != null, "Signal stone icon should load")
