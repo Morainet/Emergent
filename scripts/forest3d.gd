@@ -19,6 +19,11 @@ var ari_hp := 100.0
 var ari_action := "explore"
 var ari_source := "local"
 var ari_defend_cooldown := 0.0
+var forest_tree_positions: Array[Vector2] = []
+var ari_navigator: ForestNavigator
+var ari_route: Array[Vector3] = []
+var ari_route_goal := Vector3.INF
+var ari_repath_time := 0.0
 var pulse_ring: MeshInstance3D
 var pulse_ring_material: StandardMaterial3D
 var camera: Camera3D
@@ -217,6 +222,7 @@ func _build_world() -> void:
 	add_child(sun)
 	_make_ground()
 	_make_forest()
+	ari_navigator = ForestNavigator.new(forest_tree_positions)
 	_make_ruins()
 	_make_camp()
 	_make_collectibles()
@@ -264,6 +270,7 @@ func _make_forest() -> void:
 	]
 	for i in positions.size():
 		var p: Vector2 = positions[i]
+		forest_tree_positions.append(p)
 		var height := 3.0 + float(i % 3) * 0.7
 		_tree(Vector3(p.x, 0.0, p.y), height, i)
 
@@ -618,7 +625,10 @@ func _update_ari(delta: float) -> void:
 			goal = CAMP + Vector3(2.8, 0.0, 1.5)
 		"return":
 			goal = CAMP + Vector3(2.8, 0.0, 1.5)
-	var offset := goal - ari.global_position
+	var direct_offset := goal - ari.global_position
+	direct_offset.y = 0.0
+	var waypoint := goal if direct_offset.length() <= 1.25 else _ari_waypoint(goal, delta)
+	var offset := waypoint - ari.global_position
 	offset.y = 0.0
 	var direction := offset.normalized() if offset.length() > 1.25 else Vector3.ZERO
 	ari.velocity.x = direction.x * 4.1
@@ -633,6 +643,20 @@ func _update_ari(delta: float) -> void:
 	ari_visual.animate(elapsed, Vector2(ari.velocity.x, ari.velocity.z).length(), 0.0)
 	if ari.global_position.distance_to(CAMP) < 4.0:
 		ari_hp = minf(100.0, ari_hp + delta * 3.0)
+
+
+func _ari_waypoint(goal: Vector3, delta: float) -> Vector3:
+	ari_repath_time -= delta
+	if ari_repath_time <= 0.0 or ari_route_goal.distance_to(goal) > 1.5 or ari_route.is_empty():
+		ari_route = ari_navigator.route(ari.global_position, goal)
+		ari_route_goal = goal
+		ari_repath_time = 0.6
+	while not ari_route.is_empty():
+		var point: Vector3 = ari_route.front()
+		if Vector2(point.x - ari.global_position.x, point.z - ari.global_position.z).length() > 0.75:
+			break
+		ari_route.pop_front()
+	return ari_route.front() if not ari_route.is_empty() else ari.global_position
 
 
 func _update_wolves(delta: float) -> void:

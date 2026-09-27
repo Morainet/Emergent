@@ -13,6 +13,19 @@ func _run() -> void:
 	var ari: CharacterBody3D = game.get("ari")
 	assert(ari.name == "Ari" and ari.get_node("AriAvatar") != null, "Ari should spawn beside the camp")
 	assert(game.call("_local_ari_decision") == "explore", "Healthy Ari should guide exploration")
+	var navigator: ForestNavigator = game.get("ari_navigator")
+	var detour := navigator.route(Vector3(-25.0, 1.0, -12.0), Vector3(-17.0, 1.0, -12.0))
+	assert(not detour.is_empty(), "Ari should have a route across the forest")
+	var bends_around_tree := false
+	for point in detour:
+		if absf(point.z + 12.0) > 0.5:
+			bends_around_tree = true
+		assert(not navigator.grid.is_point_solid(navigator._world_to_id(point)), "Ari's route must avoid solid tree cells")
+	assert(bends_around_tree, "Ari should detour around a tree directly between start and goal")
+	var escape_route := navigator.route(Vector3(-21.0, 1.0, -12.0), Vector3(-17.0, 1.0, -12.0))
+	assert(not escape_route.is_empty(), "Ari should find an exit if spawned in a blocked tree cell")
+	assert(not navigator.grid.is_point_solid(navigator._world_to_id(escape_route.front())), "The first escape waypoint should be walkable")
+	assert(not navigator.route(Vector3(29.0, 1.0, 29.0), Vector3(-29.0, 1.0, -29.0)).is_empty(), "Routes should clamp to map bounds")
 	var avatar: Node3D = player.get_node("ExplorerAvatar")
 	assert(avatar.get_node("LeftLeg") != null and avatar.get_node("RightLeg") != null, "Explorer should have animated legs")
 	assert(avatar.get_node("LeftArm") != null and avatar.get_node("RightArm") != null, "Explorer should have animated arms")
