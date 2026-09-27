@@ -25,6 +25,8 @@ var satchel: Node3D
 var action_name := ""
 var action_time := 0.0
 var action_duration := 0.0
+var was_grounded := true
+var landing_time := 0.0
 
 
 func _ready() -> void:
@@ -37,9 +39,10 @@ func play_action(name: String, duration: float = 0.42) -> void:
 	action_time = duration
 
 
-func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_speed: float = 0.0, grounded: bool = true, delta: float = 0.016) -> void:
+func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_speed: float = 0.0, grounded: bool = true, delta: float = 0.016, step_phase: float = -1.0) -> void:
 	var stride := clampf(horizontal_speed / 7.0, 0.0, 1.0)
-	var swing := sin(walk_time * 11.0) * 0.48 * stride
+	var cadence := step_phase if step_phase >= 0.0 else walk_time * 11.0
+	var swing := sin(cadence) * 0.48 * stride
 	left_leg.rotation.x = swing
 	right_leg.rotation.x = -swing
 	left_arm.rotation.x = -swing * 0.65
@@ -67,8 +70,14 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 		action_time = maxf(0.0, action_time - delta)
 	else:
 		rotation.x = 0.0
-	position.y = absf(sin(walk_time * 11.0)) * 0.035 * stride + sin(walk_time * 2.2) * 0.008 * (1.0 - stride)
-	satchel.rotation.z = sin(walk_time * 11.0) * 0.08 * stride
+	if grounded and not was_grounded:
+		landing_time = 0.18
+	was_grounded = grounded
+	landing_time = maxf(0.0, landing_time - delta)
+	var squash := sin(PI * landing_time / 0.18) * 0.06
+	scale = Vector3(1.0 + squash * 0.5, 1.0 - squash, 1.0 + squash * 0.5)
+	position.y = absf(sin(cadence)) * 0.035 * stride + sin(walk_time * 2.2) * 0.008 * (1.0 - stride)
+	satchel.rotation.z = sin(cadence) * 0.08 * stride
 	pendant.scale = Vector3.ONE * (1.0 + pulse * 0.65)
 
 

@@ -7,6 +7,7 @@ const ARI_ACTIONS = ["hide", "gather", "explore", "defend", "return"]
 const MAP_EDGE = 29.0
 const MOUSE_SENSITIVITY = 0.003
 const CAMERA_DISTANCE = 10.5
+const PLAYER_SPEED = 7.0
 const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
@@ -38,6 +39,14 @@ var pulse_ring_material: StandardMaterial3D
 var camera: Camera3D
 var camera_yaw := 0.0
 var camera_pitch := 0.53
+var camera_distance := CAMERA_DISTANCE
+var camera_focus := Vector3.ZERO
+var camera_collision_shape: SphereShape3D
+var player_step_phase := 0.0
+var ari_step_phase := 0.0
+var jump_was_down := false
+var jump_buffer_time := 0.0
+var coyote_time := 0.0
 var mouse_captured := false
 var sun: DirectionalLight3D
 var environment: Environment
@@ -144,7 +153,9 @@ func _physics_process(delta: float) -> void:
 	was_night = _is_night()
 	_update_daylight(delta)
 	_move_player(delta)
-	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4, player.velocity.y, player.is_on_floor(), delta)
+	var player_speed := Vector2(player.velocity.x, player.velocity.z).length()
+	player_step_phase += player_speed * delta * 1.6
+	player_visual.animate(elapsed, player_speed, pulse_visual / 0.4, player.velocity.y, player.is_on_floor(), delta, player_step_phase)
 	_update_pulse_effect()
 	_update_ari(delta)
 	_update_wolves(delta)
@@ -171,6 +182,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		if not button.pressed:
+			return
+		if button.button_index == MOUSE_BUTTON_WHEEL_UP or button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			camera_distance = clampf(camera_distance + (-0.8 if button.button_index == MOUSE_BUTTON_WHEEL_UP else 0.8), 5.8, 12.5)
 			return
 		if not mouse_captured:
 			if button.button_index == MOUSE_BUTTON_LEFT and not game_over:
@@ -244,7 +258,10 @@ func _build_world() -> void:
 	camera.current = true
 	camera.position = Vector3(0.0, 7.0, 12.0)
 	add_child(camera)
-	camera.look_at(Vector3(0.0, 0.8, 0.0))
+	camera_focus = player.global_position + Vector3(0.0, 1.15, 0.0)
+	camera_collision_shape = SphereShape3D.new()
+	camera_collision_shape.radius = 0.32
+	camera.look_at(camera_focus)
 
 
 func _make_ground() -> void:
@@ -853,30 +870,74 @@ func _move_player(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): axis.x += 1.0
 	axis = axis.normalized()
 	var move_direction := _movement_direction(axis, camera_yaw)
-	player.velocity.x = move_direction.x * 7.0
-	player.velocity.z = move_direction.z * 7.0
-	if not player.is_on_floor():
-		player.velocity.y -= 22.0 * delta
-	elif Input.is_key_pressed(KEY_SPACE):
+	var horizontal := _approach_horizontal_velocity(Vector2(player.velocity.x, player.velocity.z), Vector2(move_direction.x, move_direction.z) * PLAYER_SPEED, delta, player.is_on_floor())
+	player.velocity.x = horizontal.x
+	player.velocity.z = horizontal.y
+	var grounded := player.is_on_floor()
+	if _should_jump(Input.is_key_pressed(KEY_SPACE), grounded, delta):
 		player.velocity.y = 8.2
-	if move_direction.length() > 0.1:
-		player.rotation.y = lerp_angle(player.rotation.y, atan2(-move_direction.x, -move_direction.z), minf(1.0, delta * 10.0))
+	elif not grounded:
+		player.velocity.y -= 22.0 * delta
+	else:
+		player.velocity.y = -0.1
+	if horizontal.length() > 0.2:
+		player.rotation.y = lerp_angle(player.rotation.y, atan2(-horizontal.x, -horizontal.y), 1.0 - exp(-delta * 12.0))
 	player.move_and_slide()
 	player.position.x = clampf(player.position.x, -MAP_EDGE, MAP_EDGE)
 	player.position.z = clampf(player.position.z, -MAP_EDGE, MAP_EDGE)
 
 
+func _should_jump(jump_down: bool, grounded: bool, delta: float) -> bool:
+	coyote_time = 0.12 if grounded else maxf(0.0, coyote_time - delta)
+	if jump_down and not jump_was_down:
+		jump_buffer_time = 0.14
+	jump_was_down = jump_down
+	jump_buffer_time = maxf(0.0, jump_buffer_time - delta)
+	if jump_buffer_time > 0.0 and coyote_time > 0.0:
+		jump_buffer_time = 0.0
+		coyote_time = 0.0
+		return true
+	return false
+
+
+func _approach_horizontal_velocity(current: Vector2, target: Vector2, delta: float, grounded: bool) -> Vector2:
+	var response := 8.0
+	if grounded:
+		response = 24.0 if target.length() > 0.01 else 29.0
+	return current.move_toward(target, response * delta)
+
+
 func _update_camera(delta: float) -> void:
-	var focus := player.global_position + Vector3(0.0, 1.2, 0.0)
-	var offset := Vector3(sin(camera_yaw) * cos(camera_pitch), sin(camera_pitch), cos(camera_yaw) * cos(camera_pitch)) * CAMERA_DISTANCE
-	var desired := focus + offset
-	var ray := PhysicsRayQueryParameters3D.create(focus, desired)
-	ray.exclude = [player.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(ray)
-	if not hit.is_empty():
-		desired = hit["position"] + hit["normal"] * 0.35
-	camera.global_position = camera.global_position.lerp(desired, minf(1.0, delta * 9.0))
-	camera.look_at(focus)
+	var right := Vector3(cos(camera_yaw), 0.0, -sin(camera_yaw))
+	var target_focus := player.global_position + Vector3(0.0, 1.15, 0.0) + right * 0.28
+	camera_focus = camera_focus.lerp(target_focus, 1.0 - exp(-delta * 12.0))
+	var offset := Vector3(sin(camera_yaw) * cos(camera_pitch), sin(camera_pitch), cos(camera_yaw) * cos(camera_pitch)) * camera_distance
+	var desired := _camera_collision_position(camera_focus, camera_focus + offset)
+	var follow_rate := 18.0 if camera.global_position.distance_to(camera_focus) > desired.distance_to(camera_focus) else 8.0
+	var candidate := camera.global_position.lerp(desired, 1.0 - exp(-delta * follow_rate))
+	camera.global_position = _camera_collision_position(camera_focus, candidate)
+	camera.look_at(camera_focus)
+	var speed_ratio := clampf(Vector2(player.velocity.x, player.velocity.z).length() / PLAYER_SPEED, 0.0, 1.0)
+	camera.fov = lerpf(camera.fov, 68.0 + speed_ratio * 3.0, 1.0 - exp(-delta * 4.0))
+
+
+func _camera_collision_position(focus: Vector3, target: Vector3) -> Vector3:
+	var motion := target - focus
+	if motion.length() < 0.01:
+		return target
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = camera_collision_shape
+	query.transform = Transform3D(Basis.IDENTITY, focus)
+	query.motion = motion
+	var excluded: Array[RID] = [player.get_rid(), ari.get_rid()]
+	for wolf_data in wolves:
+		var wolf: CharacterBody3D = wolf_data["node"]
+		excluded.append(wolf.get_rid())
+	query.exclude = excluded
+	var travel := get_world_3d().direct_space_state.cast_motion(query)
+	if travel.is_empty() or travel[0] >= 0.999:
+		return target
+	return focus + motion * maxf(0.0, travel[0] - 0.015)
 
 
 func _movement_direction(axis: Vector2, yaw: float) -> Vector3:
@@ -990,7 +1051,9 @@ func _update_ari(delta: float) -> void:
 	ari.move_and_slide()
 	if direction.length() > 0.1:
 		ari.rotation.y = lerp_angle(ari.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
-	ari_visual.animate(elapsed, Vector2(ari.velocity.x, ari.velocity.z).length(), 0.0, ari.velocity.y, ari.is_on_floor(), delta)
+	var ari_speed := Vector2(ari.velocity.x, ari.velocity.z).length()
+	ari_step_phase += ari_speed * delta * 1.6
+	ari_visual.animate(elapsed, ari_speed, 0.0, ari.velocity.y, ari.is_on_floor(), delta, ari_step_phase)
 	if ari.global_position.distance_to(CAMP) < 4.0:
 		ari_hp = minf(100.0, ari_hp + delta * 3.0)
 
