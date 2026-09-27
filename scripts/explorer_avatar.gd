@@ -11,6 +11,9 @@ const LEATHER := Color("725842")
 const BOOTS := Color("473b34")
 const SIGNAL := Color("79ecdf")
 
+var jacket_color := JACKET
+var jacket_light_color := JACKET_LIGHT
+var signal_color := SIGNAL
 var left_leg: Node3D
 var right_leg: Node3D
 var left_arm: Node3D
@@ -42,18 +45,18 @@ func _build() -> void:
 		_box(leg, Vector3(0.31, 0.23, 0.35), Vector3(0.0, -0.42, 0.0), LEATHER)
 		_box(leg, Vector3(0.34, 0.16, 0.48), Vector3(0.0, -0.53, -0.06), BOOTS)
 
-	_box(self, Vector3(0.67, 0.69, 0.38), Vector3(0.0, 0.03, 0.0), JACKET)
+	_box(self, Vector3(0.67, 0.69, 0.38), Vector3(0.0, 0.03, 0.0), jacket_color)
 	_box(self, Vector3(0.30, 0.48, 0.025), Vector3(0.0, 0.08, -0.205), SHIRT)
-	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(-0.23, 0.07, -0.22), JACKET_LIGHT)
-	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(0.23, 0.07, -0.22), JACKET_LIGHT)
+	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(-0.23, 0.07, -0.22), jacket_light_color)
+	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(0.23, 0.07, -0.22), jacket_light_color)
 	_box(self, Vector3(0.73, 0.10, 0.42), Vector3(0.0, -0.30, 0.0), LEATHER)
 	_box(self, Vector3(0.09, 0.12, 0.035), Vector3(0.0, -0.30, -0.23), Color("bdab78"))
 
 	left_arm = _limb("LeftArm", Vector3(-0.42, 0.29, 0.0))
 	right_arm = _limb("RightArm", Vector3(0.42, 0.29, 0.0))
 	for arm in [left_arm, right_arm]:
-		_box(arm, Vector3(0.25, 0.45, 0.29), Vector3(0.0, -0.23, 0.0), JACKET_LIGHT)
-		_box(arm, Vector3(0.23, 0.10, 0.30), Vector3(0.0, -0.47, 0.0), JACKET)
+		_box(arm, Vector3(0.25, 0.45, 0.29), Vector3(0.0, -0.23, 0.0), jacket_light_color)
+		_box(arm, Vector3(0.23, 0.10, 0.30), Vector3(0.0, -0.47, 0.0), jacket_color)
 		_box(arm, Vector3(0.16, 0.18, 0.19), Vector3(0.0, -0.60, 0.0), SKIN)
 
 	_box(self, Vector3(0.18, 0.16, 0.17), Vector3(0.0, 0.40, 0.0), SKIN)
@@ -73,7 +76,7 @@ func _build() -> void:
 	back_strap.rotation.z = 0.50
 	_box(self, Vector3(0.38, 0.32, 0.19), Vector3(0.35, -0.18, 0.21), LEATHER)
 	_box(self, Vector3(0.36, 0.07, 0.21), Vector3(0.35, -0.03, 0.21), Color("8b6c50"))
-	pendant = _box(self, Vector3(0.11, 0.16, 0.06), Vector3(0.0, 0.25, -0.28), SIGNAL, true)
+	pendant = _box(self, Vector3(0.11, 0.16, 0.06), Vector3(0.0, 0.25, -0.28), signal_color, true)
 	pendant.rotation.z = PI / 4.0
 
 

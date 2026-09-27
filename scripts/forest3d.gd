@@ -3,6 +3,7 @@ extends Node3D
 const CAMP = Vector3(0.0, 0.0, 0.0)
 const AI_URL = "http://127.0.0.1:8765/decide"
 const WOLF_ACTIONS = ["hunt", "observe", "retreat", "roam"]
+const ARI_ACTIONS = ["hide", "gather", "explore", "defend", "return"]
 const MAP_EDGE = 29.0
 const MOUSE_SENSITIVITY = 0.003
 const CAMERA_DISTANCE = 10.5
@@ -12,6 +13,12 @@ const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 
 var player: CharacterBody3D
 var player_visual: ExplorerAvatar
+var ari: CharacterBody3D
+var ari_visual: ExplorerAvatar
+var ari_hp := 100.0
+var ari_action := "explore"
+var ari_source := "local"
+var ari_defend_cooldown := 0.0
 var pulse_ring: MeshInstance3D
 var pulse_ring_material: StandardMaterial3D
 var camera: Camera3D
@@ -22,6 +29,7 @@ var sun: DirectionalLight3D
 var environment: Environment
 var fire_light: OmniLight3D
 var ai_http: HTTPRequest
+var ari_http: HTTPRequest
 var wolves: Array[Dictionary] = []
 var shards: Array[Dictionary] = []
 var berries: Array[Dictionary] = []
@@ -34,7 +42,11 @@ var pulse_cooldown := 0.0
 var pulse_visual := 0.0
 var scan_time := 0.0
 var ai_timer := 0.0
+var ai_round := 0
 var ai_busy := false
+var ari_busy := false
+var pack_model_age := 0.0
+var ari_model_age := 0.0
 var use_laya := false
 var pack_action := "roam"
 var pack_source := "local"
@@ -54,6 +66,7 @@ var message_label: Label
 var debug_label: Label
 var end_label: Label
 var pulse_label: Label
+var ari_status_label: Label
 var pulse_fill: ColorRect
 var scan_panel: ColorRect
 var scan_label: Label
@@ -64,9 +77,13 @@ func _ready() -> void:
 	_build_world()
 	_build_ui()
 	ai_http = HTTPRequest.new()
-	ai_http.timeout = 2.0
+	ai_http.timeout = 4.5
 	add_child(ai_http)
 	ai_http.request_completed.connect(_on_ai_response)
+	ari_http = HTTPRequest.new()
+	ari_http.timeout = 4.5
+	add_child(ari_http)
+	ari_http.request_completed.connect(_on_ari_response)
 	_capture_mouse()
 	_update_ui()
 
@@ -101,6 +118,9 @@ func _physics_process(delta: float) -> void:
 	elapsed += delta
 	pack_hunger = minf(100.0, pack_hunger + delta * 0.34)
 	pack_fear = maxf(0.0, pack_fear - delta * 0.7)
+	ari_defend_cooldown = maxf(0.0, ari_defend_cooldown - delta)
+	pack_model_age = maxf(0.0, pack_model_age - delta)
+	ari_model_age = maxf(0.0, ari_model_age - delta)
 	pulse_cooldown = maxf(0.0, pulse_cooldown - delta)
 	pulse_visual = maxf(0.0, pulse_visual - delta)
 	scan_time = maxf(0.0, scan_time - delta)
@@ -112,13 +132,16 @@ func _physics_process(delta: float) -> void:
 	_move_player(delta)
 	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4)
 	_update_pulse_effect()
+	_update_ari(delta)
 	_update_wolves(delta)
 	_animate_collectibles(delta)
 	_update_camera(delta)
 	ai_timer -= delta
 	if ai_timer <= 0.0:
 		ai_timer = 2.5
-		_decide_pack()
+		_decide_pack(ai_round % 2 == 0)
+		_decide_ari(ai_round % 2 == 1)
+		ai_round += 1
 	if player_hp <= 0.0:
 		game_over = true
 		message = "The forest fell silent."
@@ -167,7 +190,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F1: show_debug = not show_debug
 		KEY_L:
 			use_laya = not use_laya
-			_say("Laya decisions enabled." if use_laya else "Local wolf decisions enabled.")
+			if not use_laya:
+				pack_model_age = 0.0
+				ari_model_age = 0.0
+				_decide_pack(false)
+				_decide_ari(false)
+			_say("Laya decisions enabled for Ari and wolves." if use_laya else "Local decisions enabled for Ari and wolves.")
 	_update_ui()
 
 
@@ -193,6 +221,7 @@ func _build_world() -> void:
 	_make_camp()
 	_make_collectibles()
 	_make_player()
+	_make_ari()
 	_make_wolves()
 	camera = Camera3D.new()
 	camera.fov = 69.0
@@ -339,6 +368,27 @@ func _make_player() -> void:
 	player.add_child(pulse_ring)
 
 
+func _make_ari() -> void:
+	ari = CharacterBody3D.new()
+	ari.name = "Ari"
+	ari.position = Vector3(3.0, 1.2, 2.0)
+	add_child(ari)
+	var shape := CollisionShape3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.38
+	capsule.height = 1.8
+	shape.shape = capsule
+	ari.add_child(shape)
+	ari_visual = ExplorerAvatar.new()
+	ari_visual.name = "AriAvatar"
+	ari_visual.jacket_color = Color("986e4e")
+	ari_visual.jacket_light_color = Color("b88960")
+	ari_visual.signal_color = Color("ffdb89")
+	ari.add_child(ari_visual)
+	var marker := _box(ari, Vector3(0.22, 0.22, 0.22), Vector3(0.0, 1.35, 0.0), Color("ffdb89"), true)
+	marker.rotation.z = PI / 4.0
+
+
 func _make_wolves() -> void:
 	var homes := [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
 	for i in homes.size():
@@ -373,6 +423,8 @@ func _build_ui() -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(top)
 	title_label = _label(layer, Vector2(25, 10), Vector2(500, 28), 21, Color("fce2a7"))
+	ari_status_label = _label(layer, Vector2(650, 12), Vector2(325, 27), 16, Color("ffdb89"))
+	ari_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	stats_label = _label(layer, Vector2(25, 47), Vector2(900, 26), 16, Color("d0e4db"))
 	objective_label = _label(layer, Vector2(25, 92), Vector2(900, 30), 17, Color("fce2a7"))
 	for i in 3:
@@ -478,7 +530,113 @@ func _movement_direction(axis: Vector2, yaw: float) -> Vector3:
 	return (right * axis.x + forward * -axis.y).normalized()
 
 
+func _nearest_alive_wolf(origin: Vector3) -> Dictionary:
+	var nearest: Dictionary = {}
+	var best_distance := INF
+	for wolf_data in wolves:
+		if wolf_data["hp"] <= 0:
+			continue
+		var wolf: CharacterBody3D = wolf_data["node"]
+		var distance := origin.distance_squared_to(wolf.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			nearest = wolf_data
+	return nearest
+
+
+func _nearest_ready_berry(origin: Vector3) -> Dictionary:
+	var nearest: Dictionary = {}
+	var best_distance := INF
+	for berry in berries:
+		if not berry["ready"]:
+			continue
+		var node: Node3D = berry["node"]
+		var distance := origin.distance_squared_to(node.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			nearest = berry
+	return nearest
+
+
+func _nearest_untaken_shard(origin: Vector3) -> Node3D:
+	var nearest: Node3D = null
+	var best_distance := INF
+	for shard in shards:
+		if shard["taken"]:
+			continue
+		var node: Node3D = shard["node"]
+		var distance := origin.distance_squared_to(node.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			nearest = node
+	return nearest
+
+
+func _update_ari(delta: float) -> void:
+	if ari_hp <= 0.0:
+		ari_visual.rotation.z = lerpf(ari_visual.rotation.z, 1.2, minf(1.0, delta * 5.0))
+		ari.velocity.x = 0.0
+		ari.velocity.z = 0.0
+		if not ari.is_on_floor():
+			ari.velocity.y -= 22.0 * delta
+		ari.move_and_slide()
+		ari_visual.animate(elapsed, 0.0, 0.0)
+		return
+	ari_visual.rotation.z = lerpf(ari_visual.rotation.z, 0.0, minf(1.0, delta * 5.0))
+	ari_action = _safe_ari_action(ari_action)
+	var goal := CAMP + Vector3(2.8, 0.0, 1.5)
+	match ari_action:
+		"gather":
+			var berry := _nearest_ready_berry(ari.global_position)
+			if not berry.is_empty():
+				var bush: Node3D = berry["node"]
+				goal = bush.global_position
+				if ari.global_position.distance_to(goal) < 2.0:
+					berry["ready"] = false
+					bush.visible = false
+					supplies += 1
+					ari_action = "return"
+					_say("Ari gathered a supply for the camp.")
+		"explore":
+			var shard := _nearest_untaken_shard(ari.global_position)
+			if shard != null:
+				goal = shard.global_position + Vector3(2.0, 0.0, 1.0)
+				if ari.global_position.distance_to(player.global_position) > 8.0:
+					goal = player.global_position
+		"defend":
+			var wolf_data := _nearest_alive_wolf(ari.global_position)
+			if not wolf_data.is_empty():
+				var wolf: CharacterBody3D = wolf_data["node"]
+				goal = wolf.global_position
+				if ari.global_position.distance_to(goal) < 3.8 and ari_defend_cooldown <= 0.0:
+					wolf_data["stun"] = 1.6
+					wolf_data["attack"] = 1.6
+					ari_defend_cooldown = 8.0
+					pack_fear = minf(100.0, pack_fear + 18.0)
+					_say("Ari drove the wolf back!")
+		"hide":
+			goal = CAMP + Vector3(2.8, 0.0, 1.5)
+		"return":
+			goal = CAMP + Vector3(2.8, 0.0, 1.5)
+	var offset := goal - ari.global_position
+	offset.y = 0.0
+	var direction := offset.normalized() if offset.length() > 1.25 else Vector3.ZERO
+	ari.velocity.x = direction.x * 4.1
+	ari.velocity.z = direction.z * 4.1
+	if not ari.is_on_floor():
+		ari.velocity.y -= 22.0 * delta
+	else:
+		ari.velocity.y = -0.1
+	ari.move_and_slide()
+	if direction.length() > 0.1:
+		ari.rotation.y = lerp_angle(ari.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
+	ari_visual.animate(elapsed, Vector2(ari.velocity.x, ari.velocity.z).length(), 0.0)
+	if ari.global_position.distance_to(CAMP) < 4.0:
+		ari_hp = minf(100.0, ari_hp + delta * 3.0)
+
+
 func _update_wolves(delta: float) -> void:
+	pack_action = _safe_pack_action(pack_action)
 	for wolf_data in wolves:
 		var wolf: CharacterBody3D = wolf_data["node"]
 		if wolf_data["hp"] <= 0:
@@ -486,8 +644,11 @@ func _update_wolves(delta: float) -> void:
 		wolf_data["stun"] = maxf(0.0, wolf_data["stun"] - delta)
 		wolf_data["attack"] = maxf(0.0, wolf_data["attack"] - delta)
 		_update_wolf_signal(wolf_data)
-		var to_player := player.global_position - wolf.global_position
-		var flat := Vector3(to_player.x, 0.0, to_player.z)
+		var target: CharacterBody3D = player
+		if ari_hp > 0.0 and wolf.global_position.distance_to(ari.global_position) < wolf.global_position.distance_to(player.global_position):
+			target = ari
+		var to_target := target.global_position - wolf.global_position
+		var flat := Vector3(to_target.x, 0.0, to_target.z)
 		var distance := flat.length()
 		var direction := Vector3.ZERO
 		if wolf_data["stun"] <= 0.0:
@@ -519,11 +680,15 @@ func _update_wolves(delta: float) -> void:
 		wolf.move_and_slide()
 		if direction.length() > 0.1:
 			wolf.rotation.y = lerp_angle(wolf.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 7.0))
-		if pack_action == "hunt" and distance < 1.7 and wolf_data["attack"] <= 0.0 and wolf_data["stun"] <= 0.0:
+		if pack_action == "hunt" and distance < 1.7 and wolf_data["attack"] <= 0.0 and wolf_data["stun"] <= 0.0 and not (ward_built and target.global_position.distance_to(CAMP) < 9.0):
 			wolf_data["attack"] = 1.4
-			player_hp -= 13.0
+			if target == ari:
+				ari_hp = maxf(0.0, ari_hp - 13.0)
+				_say("A wolf struck Ari! Help her or drive it away.")
+			else:
+				player_hp -= 13.0
+				_say("A wolf struck! Q repels the pack.")
 			pack_hunger = maxf(0.0, pack_hunger - 9.0)
-			_say("A wolf struck! Q repels the pack.")
 
 
 func _update_wolf_signal(wolf_data: Dictionary) -> void:
@@ -576,12 +741,24 @@ func _update_daylight(delta: float) -> void:
 
 func _interact() -> void:
 	var pos := player.global_position
+	if collected == 3 and pos.distance_to(CAMP) < 3.5:
+		victory = true
+		game_over = true
+		_release_mouse()
+		return
+	if ari_hp <= 0.0 and pos.distance_to(ari.global_position) < 2.5:
+		if supplies < 1:
+			_say("Ari needs one supply to recover.")
+		else:
+			supplies -= 1
+			ari_hp = 45.0
+			ari_action = "hide"
+			ari_model_age = 0.0
+			ari_source = "local"
+			_say("Ari is back on her feet. She is heading for camp.")
+		return
 	if pos.distance_to(CAMP) < 3.5:
-		if collected == 3:
-			victory = true
-			game_over = true
-			_release_mouse()
-		elif supplies > 0 and player_hp < 100.0:
+		if supplies > 0 and player_hp < 100.0:
 			supplies -= 1
 			player_hp = minf(100.0, player_hp + 30.0)
 			_say("The fire and supplies helped you recover.")
@@ -660,10 +837,13 @@ func _build_ward() -> void:
 	_say("The ward lights the camp. Wolves keep their distance.")
 
 
-func _decide_pack() -> void:
-	pack_action = _local_pack_decision()
-	pack_source = "local"
-	if not use_laya or ai_busy:
+func _decide_pack(request_model: bool = true) -> void:
+	if not use_laya or pack_model_age <= 0.0:
+		pack_action = _local_pack_decision()
+		pack_source = "local"
+	else:
+		pack_action = _safe_pack_action(pack_action)
+	if not use_laya or ai_busy or not request_model:
 		return
 	var alive := 0
 	var health := 0
@@ -676,12 +856,19 @@ func _decide_pack() -> void:
 		nearest = minf(nearest, wolf.global_position.distance_to(player.global_position))
 	if alive == 0:
 		return
+	var nearest_ari := 999.0
+	if ari_hp > 0.0:
+		var ari_wolf := _nearest_alive_wolf(ari.global_position)
+		if not ari_wolf.is_empty():
+			var wolf: CharacterBody3D = ari_wolf["node"]
+			nearest_ari = ari.global_position.distance_to(wolf.global_position)
 	var state := {
 		"wolf_count": alive,
 		"pack_health": health,
 		"pack_hunger": roundi(pack_hunger),
 		"pack_fear": roundi(pack_fear),
 		"player_distance": roundi(nearest),
+		"npc_distance": roundi(nearest_ari),
 		"player_hp": roundi(player_hp),
 		"night": _is_night(),
 		"camp_ward_active": ward_built,
@@ -701,24 +888,148 @@ func _local_pack_decision() -> String:
 		if wolf_data["hp"] == 1: wounded += 1
 		var wolf: CharacterBody3D = wolf_data["node"]
 		nearest = minf(nearest, wolf.global_position.distance_to(player.global_position))
+		if ari_hp > 0.0:
+			nearest = minf(nearest, wolf.global_position.distance_to(ari.global_position))
 	if alive == 0: return "roam"
-	if pack_fear > 45.0 or wounded >= 2 or (ward_built and player.global_position.distance_to(CAMP) < 10.0): return "retreat"
+	if pack_fear > 45.0 or wounded >= 2 or (ward_built and (player.global_position.distance_to(CAMP) < 10.0 or ari.global_position.distance_to(CAMP) < 10.0)): return "retreat"
 	if nearest < 14.0:
 		return "hunt" if _is_night() or pack_hunger > 62.0 else "observe"
 	return "roam"
 
 
-func _on_ai_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	ai_busy = false
-	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+func _safe_pack_action(candidate: String) -> String:
+	var wounded := 0
+	var alive := 0
+	for wolf_data in wolves:
+		if wolf_data["hp"] > 0:
+			alive += 1
+		if wolf_data["hp"] == 1:
+			wounded += 1
+	if alive == 0:
+		return "roam"
+	if pack_fear > 45.0 or wounded >= 2 or (ward_built and (player.global_position.distance_to(CAMP) < 10.0 or ari.global_position.distance_to(CAMP) < 10.0)):
+		return "retreat"
+	return candidate
+
+
+func _local_ari_decision() -> String:
+	if ari_hp <= 0.0:
+		return "hide"
+	var wolf_data := _nearest_alive_wolf(ari.global_position)
+	var wolf_distance := INF
+	if not wolf_data.is_empty():
+		var wolf: CharacterBody3D = wolf_data["node"]
+		wolf_distance = ari.global_position.distance_to(wolf.global_position)
+	if ari_hp < 35.0 or (wolf_distance < 5.5 and ari_hp < 60.0):
+		return "hide"
+	if wolf_distance < 6.5 and ari_defend_cooldown <= 0.0 and ari_hp >= 60.0:
+		return "defend"
+	if player_hp < 75.0 and supplies < 2 and not _nearest_ready_berry(ari.global_position).is_empty():
+		return "gather"
+	if _nearest_untaken_shard(ari.global_position) != null:
+		return "explore"
+	if supplies < 2 and not _nearest_ready_berry(ari.global_position).is_empty():
+		return "gather"
+	return "return"
+
+
+func _safe_ari_action(candidate: String) -> String:
+	if ari_hp <= 0.0:
+		return "hide"
+	var wolf_data := _nearest_alive_wolf(ari.global_position)
+	if not wolf_data.is_empty():
+		var wolf: CharacterBody3D = wolf_data["node"]
+		var wolf_distance := ari.global_position.distance_to(wolf.global_position)
+		if wolf_distance < 5.5 and ari_hp < 60.0:
+			return "hide"
+		if wolf_distance < 4.5 and ari_hp >= 60.0 and ari_defend_cooldown <= 0.0 and candidate != "hide":
+			return "defend"
+	if candidate == "defend" and ari_hp < 60.0:
+		return "hide"
+	if candidate == "defend" and ari_defend_cooldown > 0.0:
+		return "explore" if collected < 3 else "return"
+	if candidate == "defend" and (wolf_data.is_empty() or ari.global_position.distance_to((wolf_data["node"] as CharacterBody3D).global_position) > 9.0):
+		return "explore" if collected < 3 else "return"
+	if candidate == "gather" and _nearest_ready_berry(ari.global_position).is_empty():
+		return "explore" if collected < 3 else "return"
+	if candidate == "explore" and collected >= 3:
+		return "return"
+	return candidate
+
+
+func _decide_ari(request_model: bool = true) -> void:
+	if not use_laya or ari_model_age <= 0.0:
+		ari_action = _safe_ari_action(_local_ari_decision())
+		ari_source = "local"
+	else:
+		ari_action = _safe_ari_action(ari_action)
+	if not use_laya or ari_busy or not request_model or ari_hp <= 0.0:
+		return
+	var wolf_data := _nearest_alive_wolf(ari.global_position)
+	var wolf_distance := 999.0
+	var enemy_count := 0
+	for pack_member in wolves:
+		if pack_member["hp"] <= 0:
+			continue
+		var wolf: CharacterBody3D = pack_member["node"]
+		if wolf.global_position.distance_to(ari.global_position) < 12.0:
+			enemy_count += 1
+	if not wolf_data.is_empty():
+		var nearest_wolf: CharacterBody3D = wolf_data["node"]
+		wolf_distance = ari.global_position.distance_to(nearest_wolf.global_position)
+	var shard := _nearest_untaken_shard(ari.global_position)
+	var state := {
+		"npc_hp": roundi(ari_hp),
+		"player_hp": roundi(player_hp),
+		"player_distance": roundi(ari.global_position.distance_to(player.global_position)),
+		"enemy_count": enemy_count,
+		"enemy_distance": roundi(wolf_distance),
+		"food_nearby": not _nearest_ready_berry(ari.global_position).is_empty(),
+		"supplies": supplies,
+		"night": _is_night(),
+		"signal_stones_remaining": 3 - collected,
+		"signal_distance": roundi(ari.global_position.distance_to(shard.global_position)) if shard != null else 999,
+		"camp_distance": roundi(ari.global_position.distance_to(CAMP))
+	}
+	var error := ari_http.request(AI_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"agent": "ari", "state": state}))
+	if error == OK:
+		ari_busy = true
+
+
+func _on_ari_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	ari_busy = false
+	if not use_laya or result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		ari_model_age = 0.0
 		return
 	var data = JSON.parse_string(body.get_string_from_utf8())
 	if not data is Dictionary or not data.has("action"):
+		ari_model_age = 0.0
+		return
+	var action := str(data["action"])
+	if ARI_ACTIONS.has(action):
+		ari_action = _safe_ari_action(action)
+		ari_source = "Laya+safe" if ari_action != action else "Laya"
+		ari_model_age = 6.0
+	else:
+		ari_model_age = 0.0
+
+
+func _on_ai_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	ai_busy = false
+	if not use_laya or result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		pack_model_age = 0.0
+		return
+	var data = JSON.parse_string(body.get_string_from_utf8())
+	if not data is Dictionary or not data.has("action"):
+		pack_model_age = 0.0
 		return
 	var action := str(data["action"])
 	if WOLF_ACTIONS.has(action):
-		pack_action = action
-		pack_source = "Laya"
+		pack_action = _safe_pack_action(action)
+		pack_source = "Laya+safe" if pack_action != action else "Laya"
+		pack_model_age = 6.0
+	else:
+		pack_model_age = 0.0
 
 
 func _new_night() -> void:
@@ -745,17 +1056,8 @@ func _say(text: String) -> void:
 
 
 func _nearest_signal_target() -> Vector3:
-	var nearest := CAMP
-	var best_distance := INF
-	for shard in shards:
-		if shard["taken"]:
-			continue
-		var node: Node3D = shard["node"]
-		var distance := player.global_position.distance_squared_to(node.global_position)
-		if distance < best_distance:
-			best_distance = distance
-			nearest = node.global_position
-	return nearest
+	var shard := _nearest_untaken_shard(player.global_position)
+	return shard.global_position if shard != null else CAMP
 
 
 func _scan_bearing(target: Vector3, yaw: float) -> String:
@@ -787,6 +1089,8 @@ func _scan_text() -> String:
 
 func _update_ui() -> void:
 	title_label.text = "EMERGENT  /  THE LAST SIGNAL"
+	ari_status_label.text = "ARI  %d HP  ·  %s" % [roundi(ari_hp), "DOWN" if ari_hp <= 0.0 else ari_action.to_upper()]
+	ari_status_label.modulate = Color("ff8d80") if ari_hp <= 0.0 else Color.WHITE
 	stats_label.text = "HEALTH %d     SUPPLIES %d     SIGNAL STONES %d / 3     %s" % [maxi(0, roundi(player_hp)), supplies, collected, "NIGHT" if _is_night() else "DAY"]
 	objective_label.text = "Find three stones. Q scans and repels; B builds a camp ward for two supplies."
 	for i in shard_icons.size():
@@ -798,15 +1102,17 @@ func _update_ui() -> void:
 		scan_label.text = _scan_text()
 	interaction_label.text = _nearby_interaction_text() if not game_over else ""
 	message_label.text = message if message_time > 0.0 else ""
-	debug_label.text = ("WOLVES: %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
+	debug_label.text = ("WOLVES %s [%s]  /  ARI %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, ari_action.to_upper(), ari_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
 	end_label.text = ("THE SIGNAL IS ALIVE\nYou made it home. Press R to play again." if victory else "THE FOREST WINS\nPress R to try again.") if game_over else ""
 
 
 func _nearby_interaction_text() -> String:
 	var pos := player.global_position
+	if collected == 3 and pos.distance_to(CAMP) < 3.5:
+		return "E / RMB  ·  Complete the signal"
+	if ari_hp <= 0.0 and pos.distance_to(ari.global_position) < 2.5:
+		return "E / RMB  ·  Revive Ari (one supply)" if supplies > 0 else "Ari is down  ·  Find one supply"
 	if pos.distance_to(CAMP) < 3.5:
-		if collected == 3:
-			return "E / RMB  ·  Complete the signal"
 		if not ward_built and supplies >= 2:
 			return "B  ·  Build a camp ward"
 		if supplies > 0 and player_hp < 100.0:

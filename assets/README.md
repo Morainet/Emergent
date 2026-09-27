@@ -1,6 +1,6 @@
 # 游戏素材
 
-以下 PNG 使用 Codex 内置 `image_gen` 生成。地表、石材和 HUD 图标已接入 3D 主场景。角色图是建模参考；当前可操控的主角由 `scripts/explorer_avatar.gd` 依据该设计程序化搭建，而不是直接加载图片作为 3D 模型。无外部图库素材。
+以下 PNG 使用 Codex 内置 `image_gen` 生成。地表、石材和 HUD 图标已接入 3D 主场景。角色图是建模参考；当前主角与营地同伴 Ari 共用 `scripts/explorer_avatar.gd` 的程序化几何体并采用不同配色，而不是直接加载图片作为 3D 模型。无外部图库素材。
 
 | 文件 | 用途 |
 | --- | --- |
