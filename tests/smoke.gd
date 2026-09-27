@@ -52,8 +52,12 @@ func _run() -> void:
 				assert(tree.distance_to(a + segment * t) > 1.1, "A marked trail should not run through a tree")
 	var details: Node3D = game.get("map_details")
 	assert(details.name == "MapDetails" and details.get_child_count() > 100, "Map landmarks and undergrowth should be present")
+	var textured_trail := false
 	for detail in details.get_children():
 		assert(detail is MeshInstance3D, "Map dressing must not introduce collision bodies")
+		if detail.material_override is StandardMaterial3D and detail.material_override.albedo_texture == load("res://assets/textures/trail_earth.png"):
+			textured_trail = true
+	assert(textured_trail, "A trail should use the new earth texture")
 	var icons: Array = game.get("shard_icons")
 	assert(icons.size() == 3, "HUD should show three signal stone icons")
 	assert(icons[0].texture != null, "Signal stone icon should load")

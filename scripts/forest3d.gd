@@ -9,6 +9,8 @@ const MOUSE_SENSITIVITY = 0.003
 const CAMERA_DISTANCE = 10.5
 const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
+const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
+const MOSS_BARK_TEXTURE = preload("res://assets/textures/moss_bark.png")
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 const SHARD_SITES = [Vector3(-21, 0, -21), Vector3(22, 0, -20), Vector3(19, 0, 21)]
 const WOLF_DENS = [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
@@ -284,7 +286,7 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 	var trunk := StaticBody3D.new()
 	trunk.position = pos + Vector3(0.0, height * 0.42, 0.0)
 	add_child(trunk)
-	_cylinder(trunk, 0.27, height * 0.84, Vector3.ZERO, Color("6c5642"))
+	_cylinder(trunk, 0.27, height * 0.84, Vector3.ZERO, Color.WHITE).material_override = _textured_material(MOSS_BARK_TEXTURE)
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
 	shape.radius = 0.32
@@ -348,8 +350,10 @@ func _make_map_details() -> void:
 			var direction := finish - start
 			var trail := _box(map_details, Vector3(1.65, 0.035, direction.length() + 0.25), Vector3((start.x + finish.x) * 0.5, 0.048, (start.y + finish.y) * 0.5), Color("756c56"))
 			trail.rotation.y = atan2(direction.x, direction.y)
+			trail.material_override = _textured_material(TRAIL_EARTH_TEXTURE, Vector3(1.0, direction.length() / 3.0, 1.0))
 	_make_site_landmarks()
 	_make_den_markers()
+	_make_forest_props()
 	_scatter_undergrowth()
 
 
@@ -389,6 +393,36 @@ func _make_den_markers() -> void:
 			var rock := _box(map_details, Vector3(0.65, 0.38 + float(i % 3) * 0.17, 0.55), p + Vector3(0.0, 0.23, 0.0), Color("485852"))
 			rock.rotation.y = angle
 			_cone(map_details, 0.18, 0.65, p + Vector3(0.55, 0.32, 0.0), Color("775f51"))
+
+
+func _make_forest_props() -> void:
+	# Deliberately sparse silhouette props leave the three readable routes open.
+	for position in [Vector2(-17, -4), Vector2(-5, -18), Vector2(15, -4), Vector2(5, 17), Vector2(-20, 17)]:
+		var log := _cylinder(map_details, 0.35, 3.2, Vector3(position.x, 0.38, position.y), Color.WHITE)
+		log.rotation.z = PI * 0.5
+		log.material_override = _textured_material(MOSS_BARK_TEXTURE)
+		for end in [-1.45, 1.45]:
+			var end_cap := _cylinder(map_details, 0.38, 0.1, Vector3(position.x + end, 0.38, position.y), Color("97826b"))
+			end_cap.rotation.z = PI * 0.5
+	for position in [Vector2(-27, -16), Vector2(-27, 14), Vector2(-3, 23), Vector2(27, 18), Vector2(27, -15), Vector2(3, -27)]:
+		var p := Vector3(position.x, 0.0, position.y)
+		for i in 3:
+			var h := 0.9 + float(i % 2) * 0.55
+			var boulder := _box(map_details, Vector3(1.5 + float(i % 2) * 0.6, h, 1.3), p + Vector3(float(i - 1) * 0.9, h * 0.42, float(i % 2) * 0.65), Color("6d7b72"))
+			boulder.rotation.y = float(i) * 0.7
+			boulder.material_override = _textured_material(RUIN_STONE_TEXTURE)
+	for position in [Vector2(-24, -17), Vector2(-16, -17), Vector2(-14, 19), Vector2(7, 20), Vector2(18, -13), Vector2(27, 13)]:
+		var p := Vector3(position.x, 0.0, position.y)
+		for i in 4:
+			var angle := float(i) * TAU / 4.0
+			var leaf := _cone(map_details, 0.55, 1.1, p + Vector3(cos(angle) * 0.32, 0.55, sin(angle) * 0.32), Color("668b69") if i % 2 == 0 else Color("4d785e"))
+			leaf.rotation.z = cos(angle) * 0.4
+			leaf.rotation.x = sin(angle) * 0.4
+	for position in [Vector2(-23, -19), Vector2(-19, -24), Vector2(17, 24), Vector2(23, 19)]:
+		for i in 3:
+			var p := Vector3(position.x + float(i) * 0.35, 0.0, position.y + float(i % 2) * 0.3)
+			_cylinder(map_details, 0.055, 0.3, p + Vector3(0.0, 0.15, 0.0), Color("c8c3a6"))
+			_cone(map_details, 0.23, 0.23, p + Vector3(0.0, 0.38, 0.0), Color("88c5a8"))
 
 
 func _scatter_undergrowth() -> void:

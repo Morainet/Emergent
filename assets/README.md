@@ -6,6 +6,8 @@
 | --- | --- |
 | `textures/forest_floor.png` | 森林地表纹理，重复铺设 |
 | `textures/ruin_stone.png` | 遗迹石柱、石台纹理 |
+| `textures/trail_earth.png` | 三条探索小径的泥土落叶纹理 |
+| `textures/moss_bark.png` | 树干与倒木的苔藓树皮纹理 |
 | `ui/signal_shard.png` | HUD 三格信号石收集指示，透明背景 |
 | `characters/explorer_concept.png` | 主角完整服装与气质设定图 |
 | `characters/explorer_lowpoly_reference.png` | 与 Demo 风格更接近的低多边形角色建模参考 |
@@ -19,6 +21,14 @@
 ### ruin_stone.png
 
 > Asset type: tileable game texture for a Godot 3D low-poly survival exploration game. Primary request: orthographic, perfectly flat top-down seamless ancient ruin stone material. Muted blue-gray weathered rock, subtle angular chips, pale mineral grain and moss trapped in shallow cracks. Restrained hand-painted low-poly look, readable but not busy from a third-person camera. Even ambient illumination. Fill edge to edge, no border, no individual tile slabs, no perspective, no cast shadow, no text, no watermark. Square texture; opposing edges must match for repeat tiling.
+
+### trail_earth.png
+
+> Use case: stylized-concept. Asset type: seamless tileable ground texture for a Godot low-poly third-person forest exploration game, used on narrow walking trails. Orthographic perfectly flat top-down view of compacted warm umber soil, subtle sparse golden dry leaf flecks, tiny muted pebbles, soft painterly variation, coherent with an existing moss-green forest floor and blue-gray ruins. Even ambient illumination. Square, fill edge to edge, opposing edges should match for tiling. No large objects, no path outline, no border, no shadows, no perspective, no text, no watermark.
+
+### moss_bark.png
+
+> Use case: stylized-concept. Asset type: seamless tileable bark texture for cylindrical and box-shaped low-poly forest trees and fallen logs in a Godot third-person game. Orthographic flat material swatch, vertical dark umber bark striations with restrained gray-green moss in crevices, chunky hand-painted shapes, readable at medium distance, muted natural palette. Even ambient illumination. Square, fill edge to edge, opposing edges should match for tiling. No trunk silhouette, no leaves, no scene, no cast shadow, no text, no border, no watermark.
 
 ### signal_shard.png
 
