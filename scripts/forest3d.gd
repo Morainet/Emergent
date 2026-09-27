@@ -32,6 +32,7 @@ var collected := 0
 var elapsed := 0.0
 var pulse_cooldown := 0.0
 var pulse_visual := 0.0
+var scan_time := 0.0
 var ai_timer := 0.0
 var ai_busy := false
 var use_laya := false
@@ -54,6 +55,8 @@ var debug_label: Label
 var end_label: Label
 var pulse_label: Label
 var pulse_fill: ColorRect
+var scan_panel: ColorRect
+var scan_label: Label
 var shard_icons: Array[TextureRect] = []
 
 
@@ -100,6 +103,7 @@ func _physics_process(delta: float) -> void:
 	pack_fear = maxf(0.0, pack_fear - delta * 0.7)
 	pulse_cooldown = maxf(0.0, pulse_cooldown - delta)
 	pulse_visual = maxf(0.0, pulse_visual - delta)
+	scan_time = maxf(0.0, scan_time - delta)
 	message_time = maxf(0.0, message_time - delta)
 	if _is_night() and not was_night:
 		_new_night()
@@ -396,6 +400,15 @@ func _build_ui() -> void:
 	pulse_fill.size = pulse_track.size
 	pulse_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(pulse_fill)
+	scan_panel = ColorRect.new()
+	scan_panel.color = Color(0.04, 0.14, 0.16, 0.78)
+	scan_panel.position = Vector2(255, 176)
+	scan_panel.size = Vector2(490, 35)
+	scan_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scan_panel.visible = false
+	layer.add_child(scan_panel)
+	scan_label = _label(scan_panel, Vector2(12, 5), Vector2(466, 26), 17, Color("a8f0e5"))
+	scan_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	interaction_label = _label(layer, Vector2(270, 492), Vector2(460, 33), 19, Color("fff2c5"))
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label = _label(layer, Vector2(200, 552), Vector2(600, 35), 18, Color("fff1c9"))
@@ -599,6 +612,7 @@ func _pulse() -> void:
 		return
 	pulse_cooldown = 4.0
 	pulse_visual = 0.4
+	scan_time = 6.0
 	_update_pulse_effect()
 	var hit := 0
 	for wolf_data in wolves:
@@ -730,14 +744,58 @@ func _say(text: String) -> void:
 	message_time = 4.0
 
 
+func _nearest_signal_target() -> Vector3:
+	var nearest := CAMP
+	var best_distance := INF
+	for shard in shards:
+		if shard["taken"]:
+			continue
+		var node: Node3D = shard["node"]
+		var distance := player.global_position.distance_squared_to(node.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			nearest = node.global_position
+	return nearest
+
+
+func _scan_bearing(target: Vector3, yaw: float) -> String:
+	var offset := target - player.global_position
+	offset.y = 0.0
+	if offset.length() < 3.0:
+		return "NEARBY"
+	var direction := offset.normalized()
+	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var angle := atan2(right.dot(direction), forward.dot(direction))
+	if absf(angle) < PI / 6.0:
+		return "AHEAD"
+	if absf(angle) > PI * 5.0 / 6.0:
+		return "BEHIND"
+	return "RIGHT" if angle > 0.0 else "LEFT"
+
+
+func _scan_text() -> String:
+	var target := _nearest_signal_target()
+	var flat_distance := Vector2(target.x - player.global_position.x, target.z - player.global_position.z).length()
+	var kind := "CAMP ECHO" if collected == 3 else "SIGNAL ECHO"
+	var bearing := _scan_bearing(target, camera_yaw)
+	if bearing == "NEARBY":
+		return "%s   ·   NEARBY" % kind
+	var approximate_distance := maxi(5, roundi(flat_distance / 5.0) * 5)
+	return "%s   ·   %s   ·   ~%d m" % [kind, bearing, approximate_distance]
+
+
 func _update_ui() -> void:
 	title_label.text = "EMERGENT  /  THE LAST SIGNAL"
 	stats_label.text = "HEALTH %d     SUPPLIES %d     SIGNAL STONES %d / 3     %s" % [maxi(0, roundi(player_hp)), supplies, collected, "NIGHT" if _is_night() else "DAY"]
-	objective_label.text = "Find three stones. Gather supplies; B builds a camp ward for two supplies."
+	objective_label.text = "Find three stones. Q scans and repels; B builds a camp ward for two supplies."
 	for i in shard_icons.size():
 		shard_icons[i].modulate = Color.WHITE if i < collected else Color(0.7, 0.8, 0.78, 0.25)
 	pulse_label.text = "PULSE READY  ·  Q / LMB" if pulse_cooldown <= 0.0 else "PULSE  %.1f s" % pulse_cooldown
 	pulse_fill.size.x = 175.0 * (1.0 - pulse_cooldown / 4.0)
+	scan_panel.visible = scan_time > 0.0 and not game_over
+	if scan_panel.visible:
+		scan_label.text = _scan_text()
 	interaction_label.text = _nearby_interaction_text() if not game_over else ""
 	message_label.text = message if message_time > 0.0 else ""
 	debug_label.text = ("WOLVES: %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
