@@ -33,9 +33,34 @@ func _run() -> void:
 	assert(absf(avatar.get_node("LeftLeg").rotation.x) > 0.3, "Explorer should step when moving")
 	avatar.call("animate", 1.0, 0.0, 0.0)
 	assert(is_zero_approx(avatar.get_node("LeftLeg").rotation.x), "Explorer should stand still when idle")
+	avatar.call("animate", 1.0, 0.0, 0.0, 5.0, false)
+	assert(avatar.get_node("LeftLeg").rotation.x < -0.2, "Explorer should tuck a leg while jumping")
+	avatar.call("play_action", "interact")
+	avatar.call("animate", 1.0, 0.0, 0.0, 0.0, true, 0.1)
+	avatar.call("animate", 1.1, 0.0, 0.0, 0.0, true, 0.1)
+	assert(avatar.get_node("RightArm").rotation.x < -0.5, "Explorer should reach out to interact")
+	avatar.call("play_action", "pulse")
+	avatar.call("animate", 1.0, 0.0, 0.0, 0.0, true, 0.1)
+	avatar.call("animate", 1.1, 0.0, 0.0, 0.0, true, 0.1)
+	assert(avatar.get_node("LeftArm").rotation.x < -0.3, "Pulse should lift both arms")
+	var player_jacket_textured := false
+	for part in avatar.get_children():
+		if part is MeshInstance3D and part.material_override.albedo_texture == load("res://assets/characters/explorer_canvas.png"):
+			player_jacket_textured = true
+	assert(player_jacket_textured, "Player jacket should use its fabric texture")
+	var ari_jacket_textured := false
+	for part in ari.get_node("AriAvatar").get_children():
+		if part is MeshInstance3D and part.material_override.albedo_texture == load("res://assets/characters/ari_canvas.png"):
+			ari_jacket_textured = true
+	assert(ari_jacket_textured, "Ari should use a distinct fabric texture")
 	var ground: StaticBody3D = game.get_child(2)
 	var ground_mesh: MeshInstance3D = ground.get_child(0)
 	assert(ground_mesh.material_override.albedo_texture != null, "Forest ground texture should load")
+	var textured_canopy_count := 0
+	for world_child in game.get_children():
+		if world_child is MeshInstance3D and world_child.material_override.albedo_texture == load("res://assets/textures/pine_canopy.png"):
+			textured_canopy_count += 1
+	assert(textured_canopy_count >= 60, "Each pine canopy layer should use the foliage texture")
 	var paths: Array = game.get("trail_paths")
 	var sites: Array = game.get_script().get_script_constant_map()["SHARD_SITES"]
 	var trees: Array = game.get("forest_tree_positions")

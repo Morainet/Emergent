@@ -1,6 +1,6 @@
 # 游戏素材
 
-以下 PNG 使用 Codex 内置 `image_gen` 生成。地表、石材和 HUD 图标已接入 3D 主场景。角色图是建模参考；当前主角与营地同伴 Ari 共用 `scripts/explorer_avatar.gd` 的程序化几何体并采用不同配色，而不是直接加载图片作为 3D 模型。无外部图库素材。
+以下 PNG 使用 Codex 内置 `image_gen` 生成。地表、树冠、石材、角色外套材质和 HUD 图标已接入 3D 主场景。角色概念图仍是建模参考；当前主角与营地同伴 Ari 共用 `scripts/explorer_avatar.gd` 的程序化几何体，以不同材质和配色区分，而不是直接加载概念图作为 3D 模型。无外部图库素材。
 
 | 文件 | 用途 |
 | --- | --- |
@@ -8,6 +8,9 @@
 | `textures/ruin_stone.png` | 遗迹石柱、石台纹理 |
 | `textures/trail_earth.png` | 三条探索小径的泥土落叶纹理 |
 | `textures/moss_bark.png` | 树干与倒木的苔藓树皮纹理 |
+| `textures/pine_canopy.png` | 松树树冠针叶纹理 |
+| `characters/explorer_canvas.png` | 主角青色外套织物纹理 |
+| `characters/ari_canvas.png` | Ari 暖棕色外套织物纹理 |
 | `ui/signal_shard.png` | HUD 三格信号石收集指示，透明背景 |
 | `characters/explorer_concept.png` | 主角完整服装与气质设定图 |
 | `characters/explorer_lowpoly_reference.png` | 与 Demo 风格更接近的低多边形角色建模参考 |
@@ -29,6 +32,18 @@
 ### moss_bark.png
 
 > Use case: stylized-concept. Asset type: seamless tileable bark texture for cylindrical and box-shaped low-poly forest trees and fallen logs in a Godot third-person game. Orthographic flat material swatch, vertical dark umber bark striations with restrained gray-green moss in crevices, chunky hand-painted shapes, readable at medium distance, muted natural palette. Even ambient illumination. Square, fill edge to edge, opposing edges should match for tiling. No trunk silhouette, no leaves, no scene, no cast shadow, no text, no border, no watermark.
+
+### pine_canopy.png
+
+> Use case: stylized-concept. Asset type: square seamless tileable low-poly forest canopy texture for cone-shaped pine tree foliage in a Godot 3D exploration game. Flat orthographic material swatch only: muted pine green and sage needle clusters, hand-painted angular foliage patches, gentle tonal variation and sparse moss hints, designed to be readable from a third-person camera. Even neutral lighting, fill edge to edge, opposing edges visually match. No complete tree, no trunk, no scene, no horizon, no cast shadow, no text, border or watermark.
+
+### explorer_canvas.png
+
+> Use case: stylized-concept. Asset type: square seamless tileable material texture for the playable explorer's muted teal jacket in a Godot 3D low-poly survival exploration game. Flat orthographic fabric swatch only: restrained hand-painted woven canvas with subtle faded teal panels, a few darker worn threads and soft desaturated highlights; medium-scale broad shapes readable from a third-person camera, not photoreal. Even neutral ambient lighting, fill edge to edge, opposing edges visually match. No garment silhouette, buttons, seams, logo, text, border, shadow, perspective or watermark.
+
+### ari_canvas.png
+
+> Use case: stylized-concept. Asset type: square seamless tileable material texture for Ari, the AI companion's warm ochre-brown field jacket in a low-poly Godot forest exploration game. Flat orthographic fabric swatch only: hand-painted rugged woven canvas, muted copper-brown and warm tan threads with subtle faded patches; broad understated shapes readable at third-person camera distance. Visually distinct from the playable explorer's cool teal jacket but the same art style. Even neutral ambient lighting, fill edge to edge, opposing edges visually match. No garment silhouette, buttons, seams, symbols, logo, text, border, shadow, perspective or watermark.
 
 ### signal_shard.png
 

@@ -11,6 +11,7 @@ const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
 const MOSS_BARK_TEXTURE = preload("res://assets/textures/moss_bark.png")
+const PINE_CANOPY_TEXTURE = preload("res://assets/textures/pine_canopy.png")
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 const SHARD_SITES = [Vector3(-21, 0, -21), Vector3(22, 0, -20), Vector3(19, 0, 21)]
 const WOLF_DENS = [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
@@ -141,7 +142,7 @@ func _physics_process(delta: float) -> void:
 	was_night = _is_night()
 	_update_daylight(delta)
 	_move_player(delta)
-	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4)
+	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4, player.velocity.y, player.is_on_floor(), delta)
 	_update_pulse_effect()
 	_update_ari(delta)
 	_update_wolves(delta)
@@ -294,9 +295,12 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 	collision.shape = shape
 	trunk.add_child(collision)
 	var green := Color("447b65") if index % 3 == 0 else Color("386a60")
-	_cone(self, 1.5, 2.8, pos + Vector3(0.0, height + 0.1, 0.0), green)
-	_cone(self, 1.1, 2.2, pos + Vector3(0.0, height + 1.1, 0.0), green.lightened(0.1))
-	_cone(self, 0.65, 1.7, pos + Vector3(0.0, height + 2.0, 0.0), green.lightened(0.16))
+	for canopy in [
+		_cone(self, 1.5, 2.8, pos + Vector3(0.0, height + 0.1, 0.0), green),
+		_cone(self, 1.1, 2.2, pos + Vector3(0.0, height + 1.1, 0.0), green.lightened(0.1)),
+		_cone(self, 0.65, 1.7, pos + Vector3(0.0, height + 2.0, 0.0), green.lightened(0.16))
+	]:
+		canopy.material_override = _textured_material(PINE_CANOPY_TEXTURE)
 
 
 func _make_ruins() -> void:
@@ -728,7 +732,7 @@ func _update_ari(delta: float) -> void:
 		if not ari.is_on_floor():
 			ari.velocity.y -= 22.0 * delta
 		ari.move_and_slide()
-		ari_visual.animate(elapsed, 0.0, 0.0)
+		ari_visual.animate(elapsed, 0.0, 0.0, ari.velocity.y, ari.is_on_floor(), delta)
 		return
 	ari_visual.rotation.z = lerpf(ari_visual.rotation.z, 0.0, minf(1.0, delta * 5.0))
 	ari_action = _safe_ari_action(ari_action)
@@ -740,6 +744,7 @@ func _update_ari(delta: float) -> void:
 				var bush: Node3D = berry["node"]
 				goal = bush.global_position
 				if ari.global_position.distance_to(goal) < 2.0:
+					ari_visual.play_action("interact")
 					berry["ready"] = false
 					bush.visible = false
 					supplies += 1
@@ -757,6 +762,7 @@ func _update_ari(delta: float) -> void:
 				var wolf: CharacterBody3D = wolf_data["node"]
 				goal = wolf.global_position
 				if ari.global_position.distance_to(goal) < 3.8 and ari_defend_cooldown <= 0.0:
+					ari_visual.play_action("pulse")
 					wolf_data["stun"] = 1.6
 					wolf_data["attack"] = 1.6
 					ari_defend_cooldown = 8.0
@@ -781,7 +787,7 @@ func _update_ari(delta: float) -> void:
 	ari.move_and_slide()
 	if direction.length() > 0.1:
 		ari.rotation.y = lerp_angle(ari.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
-	ari_visual.animate(elapsed, Vector2(ari.velocity.x, ari.velocity.z).length(), 0.0)
+	ari_visual.animate(elapsed, Vector2(ari.velocity.x, ari.velocity.z).length(), 0.0, ari.velocity.y, ari.is_on_floor(), delta)
 	if ari.global_position.distance_to(CAMP) < 4.0:
 		ari_hp = minf(100.0, ari_hp + delta * 3.0)
 
@@ -849,9 +855,11 @@ func _update_wolves(delta: float) -> void:
 			wolf_data["attack"] = 1.4
 			if target == ari:
 				ari_hp = maxf(0.0, ari_hp - 13.0)
+				ari_visual.play_action("hurt")
 				_say("A wolf struck Ari! Help her or drive it away.")
 			else:
 				player_hp -= 13.0
+				player_visual.play_action("hurt")
 				_say("A wolf struck! Q repels the pack.")
 			pack_hunger = maxf(0.0, pack_hunger - 9.0)
 
@@ -905,6 +913,7 @@ func _update_daylight(delta: float) -> void:
 
 
 func _interact() -> void:
+	player_visual.play_action("interact")
 	var pos := player.global_position
 	if collected == 3 and pos.distance_to(CAMP) < 3.5:
 		victory = true
@@ -952,6 +961,7 @@ func _interact() -> void:
 func _pulse() -> void:
 	if pulse_cooldown > 0.0:
 		return
+	player_visual.play_action("pulse")
 	pulse_cooldown = 4.0
 	pulse_visual = 0.4
 	scan_time = 6.0
