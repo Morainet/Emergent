@@ -10,6 +10,8 @@ const CAMERA_DISTANCE = 10.5
 const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
+const SHARD_SITES = [Vector3(-21, 0, -21), Vector3(22, 0, -20), Vector3(19, 0, 21)]
+const WOLF_DENS = [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
 
 var player: CharacterBody3D
 var player_visual: ExplorerAvatar
@@ -20,6 +22,8 @@ var ari_action := "explore"
 var ari_source := "local"
 var ari_defend_cooldown := 0.0
 var forest_tree_positions: Array[Vector2] = []
+var trail_paths: Array[PackedVector2Array] = []
+var map_details: Node3D
 var ari_navigator: ForestNavigator
 var ari_route: Array[Vector3] = []
 var ari_route_goal := Vector3.INF
@@ -225,6 +229,7 @@ func _build_world() -> void:
 	ari_navigator = ForestNavigator.new(forest_tree_positions)
 	_make_ruins()
 	_make_camp()
+	_make_map_details()
 	_make_collectibles()
 	_make_player()
 	_make_ari()
@@ -303,6 +308,7 @@ func _make_ruins() -> void:
 
 
 func _make_camp() -> void:
+	_cylinder(self, 6.4, 0.025, Vector3(0.0, 0.012, 0.0), Color("5a604c"))
 	_cylinder(self, 1.5, 0.3, Vector3(0.0, 0.15, 0.0), Color("686057"))
 	for i in 8:
 		var angle := float(i) * TAU / 8.0
@@ -318,13 +324,114 @@ func _make_camp() -> void:
 	_box(self, Vector3(2.6, 0.45, 1.1), Vector3(4.0, 0.45, 0.5), Color("665b4c"))
 	_box(self, Vector3(0.5, 1.0, 0.5), Vector3(2.95, 0.5, 0.5), Color("665b4c"))
 	_box(self, Vector3(0.5, 1.0, 0.5), Vector3(5.05, 0.5, 0.5), Color("665b4c"))
+	_box(self, Vector3(1.0, 0.75, 0.9), Vector3(-3.7, 0.39, 2.8), Color("826a50"))
+	_box(self, Vector3(1.05, 0.12, 0.95), Vector3(-3.7, 0.82, 2.8), Color("a28661"))
+	for x in [-0.65, 0.65]:
+		var canvas := _box(self, Vector3(1.8, 0.12, 2.4), Vector3(-3.5 + x, 1.04, -3.0), Color("9e9577"))
+		canvas.rotation.z = 0.85 if x < 0.0 else -0.85
+	_box(self, Vector3(2.0, 0.08, 2.4), Vector3(-3.5, 0.08, -3.0), Color("746e5a"))
+
+
+func _make_map_details() -> void:
+	map_details = Node3D.new()
+	map_details.name = "MapDetails"
+	add_child(map_details)
+	trail_paths = [
+		PackedVector2Array([Vector2.ZERO, Vector2(-5, -4), Vector2(-11, -9), Vector2(-17, -15), Vector2(-21, -21)]),
+		PackedVector2Array([Vector2.ZERO, Vector2(7, -4), Vector2(14, -10), Vector2(22, -20)]),
+		PackedVector2Array([Vector2.ZERO, Vector2(7, 4), Vector2(12, 8), Vector2(15, 15), Vector2(19, 21)])
+	]
+	for path in trail_paths:
+		for i in range(path.size() - 1):
+			var start: Vector2 = path[i]
+			var finish: Vector2 = path[i + 1]
+			var direction := finish - start
+			var trail := _box(map_details, Vector3(1.65, 0.035, direction.length() + 0.25), Vector3((start.x + finish.x) * 0.5, 0.048, (start.y + finish.y) * 0.5), Color("756c56"))
+			trail.rotation.y = atan2(direction.x, direction.y)
+	_make_site_landmarks()
+	_make_den_markers()
+	_scatter_undergrowth()
+
+
+func _make_site_landmarks() -> void:
+	# A broken stone circle, an inscribed gate and a lone beacon give each route a silhouette.
+	var north_west: Vector3 = SHARD_SITES[0]
+	for i in 7:
+		var angle := float(i) * TAU / 7.0
+		var height := 0.65 + float(i % 3) * 0.33
+		var stone := _box(map_details, Vector3(0.62, height, 0.54), north_west + Vector3(cos(angle) * 2.5, height * 0.5, sin(angle) * 2.5), Color("71817a"))
+		stone.rotation.y = angle
+		stone.material_override = _textured_material(RUIN_STONE_TEXTURE)
+	var fallen := _box(map_details, Vector3(0.65, 0.55, 2.4), north_west + Vector3(3.0, 0.31, -1.0), Color("657773"))
+	fallen.rotation.y = 0.4
+	fallen.material_override = _textured_material(RUIN_STONE_TEXTURE)
+	for x in [20.0, 24.0]:
+		for z in [-17.0, -22.0]:
+			_box(map_details, Vector3(0.12, 0.72, 0.11), Vector3(x, 1.32, z - 0.56), Color("72d9cd"), true)
+	for i in 3:
+		_box(map_details, Vector3(1.8 + float(i) * 0.45, 0.12, 0.65), Vector3(22.0, 0.07, -14.4 + float(i) * 0.8), Color("778783"))
+	var south_east: Vector3 = SHARD_SITES[2]
+	for offset in [Vector3(-2.3, 0.0, 1.8), Vector3(2.3, 0.0, 1.8)]:
+		_box(map_details, Vector3(0.95, 2.6, 0.95), south_east + offset + Vector3(0.0, 1.3, 0.0), Color("6b7875")).material_override = _textured_material(RUIN_STONE_TEXTURE)
+	_box(map_details, Vector3(5.6, 0.52, 1.1), south_east + Vector3(0.0, 2.84, 1.8), Color("758681")).material_override = _textured_material(RUIN_STONE_TEXTURE)
+	_box(map_details, Vector3(1.6, 0.18, 0.26), south_east + Vector3(0.0, 2.86, 1.23), Color("7ee6d8"), true)
+	for i in 4:
+		var a := float(i) * TAU / 4.0 + 0.25
+		_box(map_details, Vector3(0.65, 0.3, 0.55), south_east + Vector3(cos(a) * 3.25, 0.16, sin(a) * 3.25), Color("62746d"))
+
+
+func _make_den_markers() -> void:
+	for den in WOLF_DENS:
+		for i in 5:
+			var angle := float(i) * TAU / 5.0
+			var radius := 2.2 + float(i % 2) * 0.5
+			var p: Vector3 = den + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+			var rock := _box(map_details, Vector3(0.65, 0.38 + float(i % 3) * 0.17, 0.55), p + Vector3(0.0, 0.23, 0.0), Color("485852"))
+			rock.rotation.y = angle
+			_cone(map_details, 0.18, 0.65, p + Vector3(0.55, 0.32, 0.0), Color("775f51"))
+
+
+func _scatter_undergrowth() -> void:
+	var random := RandomNumberGenerator.new()
+	random.seed = 9173
+	for i in 125:
+		var p := Vector2(random.randf_range(-27.0, 27.0), random.randf_range(-27.0, 27.0))
+		if p.length() < 7.4 or _near_map_feature(p):
+			continue
+		if i % 4 == 0:
+			var rock := _box(map_details, Vector3(random.randf_range(0.45, 0.9), 0.28, random.randf_range(0.4, 0.8)), Vector3(p.x, 0.15, p.y), Color("67746b"))
+			rock.rotation.y = random.randf_range(0.0, TAU)
+		else:
+			var height := random.randf_range(0.38, 0.75)
+			_cone(map_details, 0.28, height, Vector3(p.x, height * 0.5, p.y), Color("52775b") if i % 3 == 0 else Color("66835f"))
+			_cone(map_details, 0.22, height * 0.8, Vector3(p.x + 0.35, height * 0.4, p.y + 0.12), Color("748a64"))
+
+
+func _near_map_feature(point: Vector2) -> bool:
+	for site in SHARD_SITES:
+		if point.distance_to(Vector2(site.x, site.z)) < 4.0:
+			return true
+	for tree in forest_tree_positions:
+		if point.distance_to(tree) < 1.5:
+			return true
+	for path in trail_paths:
+		for i in range(path.size() - 1):
+			var a: Vector2 = path[i]
+			var b: Vector2 = path[i + 1]
+			var segment := b - a
+			var t := clampf((point - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
+			if point.distance_to(a + segment * t) < 1.55:
+				return true
+	return false
 
 
 func _make_collectibles() -> void:
-	for pos in [Vector3(-21, 0, -21), Vector3(22, 0, -20), Vector3(19, 0, 21)]:
+	for pos in SHARD_SITES:
 		var node := Node3D.new()
 		node.position = pos
 		add_child(node)
+		_cylinder(node, 0.85, 0.28, Vector3(0.0, 0.14, 0.0), Color("71817a"))
+		_cylinder(node, 0.58, 0.10, Vector3(0.0, 0.34, 0.0), Color("4d8079"))
 		var crystal := _box(node, Vector3(0.8, 1.5, 0.8), Vector3(0.0, 1.15, 0.0), Color("8de9df"), true)
 		crystal.rotation_degrees = Vector3(0.0, 40.0, 25.0)
 		var glow := OmniLight3D.new()
@@ -397,7 +504,7 @@ func _make_ari() -> void:
 
 
 func _make_wolves() -> void:
-	var homes := [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
+	var homes := WOLF_DENS
 	for i in homes.size():
 		var wolf := CharacterBody3D.new()
 		wolf.position = homes[i] + Vector3(0.0, 0.62, 0.0)

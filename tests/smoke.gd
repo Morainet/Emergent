@@ -36,6 +36,24 @@ func _run() -> void:
 	var ground: StaticBody3D = game.get_child(2)
 	var ground_mesh: MeshInstance3D = ground.get_child(0)
 	assert(ground_mesh.material_override.albedo_texture != null, "Forest ground texture should load")
+	var paths: Array = game.get("trail_paths")
+	var sites: Array = game.get_script().get_script_constant_map()["SHARD_SITES"]
+	var trees: Array = game.get("forest_tree_positions")
+	assert(paths.size() == 3, "Map should have one trail per signal site")
+	for i in paths.size():
+		var path: PackedVector2Array = paths[i]
+		assert(path[0] == Vector2.ZERO, "Each trail should leave the camp")
+		assert(path[path.size() - 1].distance_to(Vector2(sites[i].x, sites[i].z)) < 0.1, "Each trail should reach its signal site")
+		for j in range(path.size() - 1):
+			var a: Vector2 = path[j]
+			var segment: Vector2 = path[j + 1] - a
+			for tree in trees:
+				var t := clampf((tree - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
+				assert(tree.distance_to(a + segment * t) > 1.1, "A marked trail should not run through a tree")
+	var details: Node3D = game.get("map_details")
+	assert(details.name == "MapDetails" and details.get_child_count() > 100, "Map landmarks and undergrowth should be present")
+	for detail in details.get_children():
+		assert(detail is MeshInstance3D, "Map dressing must not introduce collision bodies")
 	var icons: Array = game.get("shard_icons")
 	assert(icons.size() == 3, "HUD should show three signal stone icons")
 	assert(icons[0].texture != null, "Signal stone icon should load")
