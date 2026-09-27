@@ -28,6 +28,18 @@ func _run() -> void:
 	assert(not navigator.grid.is_point_solid(navigator._world_to_id(escape_route.front())), "The first escape waypoint should be walkable")
 	assert(not navigator.route(Vector3(29.0, 1.0, 29.0), Vector3(-29.0, 1.0, -29.0)).is_empty(), "Routes should clamp to map bounds")
 	var avatar: Node3D = player.get_node("ExplorerAvatar")
+	assert(avatar.scene_file_path == "res://scenes/explorer_avatar.tscn", "The game should use the reusable explorer scene")
+	assert(ari.get_node("AriAvatar").scene_file_path == "res://scenes/ari_avatar.tscn", "Ari should use a distinct reusable scene")
+	assert(avatar.get_node("Coat").mesh is ArrayMesh and avatar.get_node("LeftLeg/Trouser").mesh is ArrayMesh, "Explorer should have sculpted, non-box clothing")
+	for mesh_path in ["Coat", "LeftLeg/Trouser", "LeftArm/Sleeve"]:
+		var mesh: ArrayMesh = avatar.get_node(mesh_path).mesh
+		var arrays := mesh.surface_get_arrays(0)
+		assert((arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].x > 0.0, "%s should face outwards" % mesh_path)
+	assert(ari.get_node("AriAvatar/CapCrown") != null and ari.get_node("AriAvatar/Scarf") != null, "Ari should have a distinct ranger silhouette")
+	assert(avatar.get_node("HairTuft") != null and avatar.get_node("SignalPendant") != null, "Explorer hair and signal pendant should be modelled")
+	for asset in ["res://assets/models/explorer_lowpoly.glb", "res://assets/models/ari_lowpoly.glb"]:
+		var imported_scene: PackedScene = load(asset)
+		assert(imported_scene != null, "%s should import as a standalone GLB scene" % asset)
 	assert(avatar.get_node("LeftLeg") != null and avatar.get_node("RightLeg") != null, "Explorer should have animated legs")
 	assert(avatar.get_node("LeftArm") != null and avatar.get_node("RightArm") != null, "Explorer should have animated arms")
 	avatar.call("animate", 1.0, 7.0, 0.0)

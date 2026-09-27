@@ -1,21 +1,16 @@
+@tool
 class_name ExplorerAvatar
 extends Node3D
 
-const JACKET := Color("2e716d")
-const JACKET_LIGHT := Color("408783")
-const SHIRT := Color("c9bda2")
-const SKIN := Color("d8a980")
-const HAIR := Color("292a2a")
-const TROUSERS := Color("3f403c")
-const LEATHER := Color("725842")
-const BOOTS := Color("473b34")
-const SIGNAL := Color("79ecdf")
+# Faces -Z; origin remains centred inside the gameplay capsule.
 const EXPLORER_CANVAS = preload("res://assets/characters/explorer_canvas.png")
 const ARI_CANVAS = preload("res://assets/characters/ari_canvas.png")
+const SKIN := Color("d9ac87")
+const HAIR := Color("292c30")
+const LEATHER := Color("68503d")
+const BOOTS := Color("3b3430")
 
-var jacket_color := JACKET
-var jacket_light_color := JACKET_LIGHT
-var signal_color := SIGNAL
+@export_enum("Explorer", "Ari") var character := "Explorer"
 var left_leg: Node3D
 var right_leg: Node3D
 var left_arm: Node3D
@@ -30,13 +25,14 @@ var landing_time := 0.0
 
 
 func _ready() -> void:
-	_build()
+	if get_child_count() == 0:
+		_build()
 
 
 func play_action(name: String, duration: float = 0.42) -> void:
 	action_name = name
-	action_duration = duration
-	action_time = duration
+	action_duration = maxf(duration, 0.01)
+	action_time = action_duration
 
 
 func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_speed: float = 0.0, grounded: bool = true, delta: float = 0.016, step_phase: float = -1.0) -> void:
@@ -82,90 +78,163 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 
 
 func _build() -> void:
-	# CharacterBody3D origin is at the center of its 1.8 m collision capsule.
-	left_leg = _limb("LeftLeg", Vector3(-0.17, -0.28, 0.0))
-	right_leg = _limb("RightLeg", Vector3(0.17, -0.28, 0.0))
+	var is_ari := character == "Ari"
+	var coat := Color("956e4f") if is_ari else Color("397677")
+	var coat_light := Color("bd936b") if is_ari else Color("579294")
+	var shirt := Color("e0caa5") if is_ari else Color("cfc5aa")
+	var accent := Color("ffda8a") if is_ari else Color("77eadf")
+	var fabric: Texture2D = ARI_CANVAS if is_ari else EXPLORER_CANVAS
+	var trousers := Color("4b5148") if is_ari else Color("46494a")
+
+	# Tapered trousers, separate boot shafts and toes make the stride legible.
+	left_leg = _pivot("LeftLeg", Vector3(-0.155, -0.28, 0.0))
+	right_leg = _pivot("RightLeg", Vector3(0.155, -0.28, 0.0))
 	for leg in [left_leg, right_leg]:
-		_box(leg, Vector3(0.28, 0.56, 0.30), Vector3(0.0, -0.20, 0.0), TROUSERS)
-		_box(leg, Vector3(0.31, 0.23, 0.35), Vector3(0.0, -0.42, 0.0), LEATHER)
-		_box(leg, Vector3(0.34, 0.16, 0.48), Vector3(0.0, -0.53, -0.06), BOOTS)
+		_loft(leg, "Trouser", [Vector4(0.02, 0.125, 0.14, 0.0), Vector4(-0.21, 0.155, 0.16, 0.015), Vector4(-0.40, 0.12, 0.135, 0.0), Vector4(-0.50, 0.105, 0.115, 0.0)], trousers)
+		_loft(leg, "BootShaft", [Vector4(-0.41, 0.125, 0.14, 0.0), Vector4(-0.55, 0.135, 0.14, 0.0), Vector4(-0.58, 0.12, 0.135, 0.0)], LEATHER)
+		_ellipsoid(leg, "BootToe", Vector3(0.0, -0.58, -0.105), Vector3(0.16, 0.095, 0.25), BOOTS)
+		_ellipsoid(leg, "BootSole", Vector3(0.0, -0.645, -0.095), Vector3(0.165, 0.035, 0.245), Color("27282a"))
+		_loft(leg, "BootCuff", [Vector4(-0.43, 0.135, 0.15, 0.0), Vector4(-0.49, 0.14, 0.15, 0.0)], coat_light)
 
-	var canvas: Texture2D = EXPLORER_CANVAS if jacket_color == JACKET else ARI_CANVAS
-	_box(self, Vector3(0.67, 0.69, 0.38), Vector3(0.0, 0.03, 0.0), Color.WHITE, false, canvas)
-	_box(self, Vector3(0.30, 0.48, 0.025), Vector3(0.0, 0.08, -0.205), SHIRT)
-	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(-0.23, 0.07, -0.22), jacket_light_color)
-	_box(self, Vector3(0.16, 0.52, 0.04), Vector3(0.23, 0.07, -0.22), jacket_light_color)
-	_box(self, Vector3(0.73, 0.10, 0.42), Vector3(0.0, -0.30, 0.0), LEATHER)
-	_box(self, Vector3(0.09, 0.12, 0.035), Vector3(0.0, -0.30, -0.23), Color("bdab78"))
+	# One textured sculpted body, layered with an open shirt, lapels and collar.
+	_loft(self, "Coat", [Vector4(-0.39, 0.29, 0.19, 0.0), Vector4(-0.29, 0.315, 0.20, 0.0), Vector4(0.20, 0.35, 0.22, 0.0), Vector4(0.35, 0.24, 0.17, 0.0)], Color.WHITE, fabric)
+	_loft(self, "Shirt", [Vector4(-0.31, 0.15, 0.025, -0.205), Vector4(0.21, 0.14, 0.025, -0.235), Vector4(0.32, 0.09, 0.025, -0.195)], shirt)
+	for side in [-1.0, 1.0]:
+		_polygon(self, "CoatLapel", [Vector3(side * 0.13, 0.33, -0.196), Vector3(side * 0.30, 0.29, -0.19), Vector3(side * 0.225, -0.24, -0.218), Vector3(side * 0.14, -0.30, -0.205)], coat_light)
+		_polygon(self, "RaisedCollar", [Vector3(side * 0.12, 0.43, -0.135), Vector3(side * 0.30, 0.43, -0.095), Vector3(side * 0.30, 0.28, -0.16), Vector3(side * 0.13, 0.33, -0.20)], coat)
+		_ellipsoid(self, "CoatButton", Vector3(side * 0.175, -0.16, -0.225), Vector3(0.014, 0.014, 0.008), LEATHER)
+	_loft(self, "WaistBelt", [Vector4(-0.28, 0.315, 0.208, 0.0), Vector4(-0.34, 0.315, 0.208, 0.0)], LEATHER)
+	_ellipsoid(self, "Buckle", Vector3(0.0, -0.31, -0.213), Vector3(0.05, 0.035, 0.018), Color("c7a86c"))
 
-	left_arm = _limb("LeftArm", Vector3(-0.42, 0.29, 0.0))
-	right_arm = _limb("RightArm", Vector3(0.42, 0.29, 0.0))
+	left_arm = _pivot("LeftArm", Vector3(-0.36, 0.285, 0.0))
+	right_arm = _pivot("RightArm", Vector3(0.36, 0.285, 0.0))
 	for arm in [left_arm, right_arm]:
-		_box(arm, Vector3(0.25, 0.45, 0.29), Vector3(0.0, -0.23, 0.0), Color.WHITE, false, canvas)
-		_box(arm, Vector3(0.23, 0.10, 0.30), Vector3(0.0, -0.47, 0.0), jacket_color)
-		_box(arm, Vector3(0.16, 0.18, 0.19), Vector3(0.0, -0.60, 0.0), SKIN)
+		_loft(arm, "Sleeve", [Vector4(0.04, 0.16, 0.17, 0.0), Vector4(-0.20, 0.145, 0.15, 0.0), Vector4(-0.41, 0.115, 0.12, 0.0), Vector4(-0.48, 0.12, 0.12, 0.0)], Color.WHITE, fabric)
+		_loft(arm, "RolledCuff", [Vector4(-0.43, 0.13, 0.13, 0.0), Vector4(-0.51, 0.12, 0.125, 0.0)], coat_light)
+		_ellipsoid(arm, "Hand", Vector3(0.0, -0.60, 0.0), Vector3(0.085, 0.135, 0.085), SKIN)
+		_ellipsoid(arm, "Thumb", Vector3(-0.075 if arm == left_arm else 0.075, -0.56, -0.045), Vector3(0.035, 0.07, 0.05), SKIN)
 
-	_box(self, Vector3(0.18, 0.16, 0.17), Vector3(0.0, 0.40, 0.0), SKIN)
-	_sphere(self, 0.29, Vector3(0.0, 0.66, 0.0), SKIN)
-	_box(self, Vector3(0.61, 0.18, 0.49), Vector3(0.0, 0.88, 0.015), HAIR)
-	_box(self, Vector3(0.22, 0.14, 0.25), Vector3(-0.19, 0.83, -0.22), HAIR)
-	_box(self, Vector3(0.22, 0.14, 0.25), Vector3(0.19, 0.83, -0.22), HAIR)
-	_box(self, Vector3(0.10, 0.18, 0.18), Vector3(-0.29, 0.68, 0.01), HAIR)
-	_box(self, Vector3(0.10, 0.18, 0.18), Vector3(0.29, 0.68, 0.01), HAIR)
-	for x in [-0.11, 0.11]:
-		_box(self, Vector3(0.055, 0.045, 0.02), Vector3(x, 0.69, -0.286), HAIR)
+	_loft(self, "Neck", [Vector4(0.33, 0.105, 0.105, 0.0), Vector4(0.49, 0.09, 0.09, 0.0)], SKIN)
+	_ellipsoid(self, "Head", Vector3(0.0, 0.655, -0.012), Vector3(0.215, 0.26, 0.205), SKIN)
+	_ellipsoid(self, "Jaw", Vector3(0.0, 0.535, -0.065), Vector3(0.155, 0.105, 0.155), SKIN)
+	for side in [-1.0, 1.0]:
+		_ellipsoid(self, "Ear", Vector3(side * 0.218, 0.635, -0.015), Vector3(0.045, 0.075, 0.045), SKIN)
+		_ellipsoid(self, "Eye", Vector3(side * 0.082, 0.682, -0.207), Vector3(0.018, 0.025, 0.009), Color("302b2a"))
+		_ellipsoid(self, "Brow", Vector3(side * 0.085, 0.724, -0.209), Vector3(0.07, 0.012, 0.015), HAIR)
+	_ellipsoid(self, "Nose", Vector3(0.0, 0.622, -0.216), Vector3(0.037, 0.067, 0.045), Color("c69070"))
+	_ellipsoid(self, "Mouth", Vector3(0.0, 0.540, -0.199), Vector3(0.055, 0.009, 0.006), Color("895d58"))
+	if is_ari:
+		_loft(self, "Scarf", [Vector4(0.36, 0.165, 0.15, 0.0), Vector4(0.43, 0.15, 0.145, 0.0), Vector4(0.48, 0.11, 0.11, 0.0)], Color("58736c"))
+		_ellipsoid(self, "Hair", Vector3(0.0, 0.805, 0.02), Vector3(0.225, 0.125, 0.21), Color("4c3630"))
+		_ellipsoid(self, "CapCrown", Vector3(0.0, 0.845, 0.0), Vector3(0.255, 0.105, 0.22), coat)
+		_ellipsoid(self, "CapBrim", Vector3(0.0, 0.785, -0.175), Vector3(0.24, 0.025, 0.145), coat_light)
+	else:
+		_ellipsoid(self, "HairBack", Vector3(0.0, 0.79, 0.075), Vector3(0.23, 0.16, 0.17), HAIR)
+		_ellipsoid(self, "HairTop", Vector3(0.0, 0.84, 0.0), Vector3(0.24, 0.12, 0.205), HAIR)
+		for tuft in [Vector3(-0.15, 0.785, -0.16), Vector3(-0.02, 0.81, -0.18), Vector3(0.13, 0.78, -0.16)]:
+			_ellipsoid(self, "HairTuft", tuft, Vector3(0.095, 0.08, 0.09), HAIR)
 
-	# Readable from the third-person camera as well as the front.
-	var front_strap := _box(self, Vector3(0.085, 0.74, 0.04), Vector3(0.0, 0.05, -0.245), LEATHER)
-	front_strap.rotation.z = -0.50
-	var back_strap := _box(self, Vector3(0.085, 0.74, 0.04), Vector3(0.0, 0.05, 0.225), LEATHER)
-	back_strap.rotation.z = 0.50
-	satchel = _limb("Satchel", Vector3(0.35, -0.18, 0.21))
-	_box(satchel, Vector3(0.38, 0.32, 0.19), Vector3.ZERO, LEATHER)
-	_box(satchel, Vector3(0.36, 0.07, 0.21), Vector3(0.0, 0.15, 0.0), Color("8b6c50"))
-	pendant = _box(self, Vector3(0.11, 0.16, 0.06), Vector3(0.0, 0.25, -0.28), signal_color, true)
+	var front_strap := _loft(self, "FrontStrap", [Vector4(-0.32, 0.042, 0.022, -0.238), Vector4(0.34, 0.042, 0.022, -0.200)], LEATHER)
+	front_strap.rotation.z = -0.43
+	var back_strap := _loft(self, "BackStrap", [Vector4(-0.32, 0.042, 0.022, 0.217), Vector4(0.34, 0.042, 0.022, 0.194)], LEATHER)
+	back_strap.rotation.z = 0.43
+	satchel = _pivot("Satchel", Vector3(0.31, -0.18, 0.20))
+	_loft(satchel, "Bag", [Vector4(-0.20, 0.165, 0.105, 0.0), Vector4(0.12, 0.17, 0.11, 0.0)], LEATHER)
+	_polygon(satchel, "BagFlap", [Vector3(-0.16, 0.12, 0.115), Vector3(0.16, 0.12, 0.115), Vector3(0.13, -0.035, 0.118), Vector3(-0.13, -0.035, 0.118)], coat_light)
+	_ellipsoid(satchel, "BagClasp", Vector3(0.0, -0.02, 0.128), Vector3(0.035, 0.04, 0.015), Color("c7a86c"))
+	pendant = _ellipsoid(self, "SignalPendant", Vector3(0.0, 0.245, -0.254), Vector3(0.055, 0.09, 0.035), accent, true)
 	pendant.rotation.z = PI / 4.0
 
 
-func _limb(label: String, offset: Vector3) -> Node3D:
-	var limb := Node3D.new()
-	limb.name = label
-	limb.position = offset
-	add_child(limb)
-	return limb
+func _pivot(label: String, offset: Vector3) -> Node3D:
+	var node := Node3D.new()
+	node.name = label
+	node.position = offset
+	add_child(node)
+	return node
 
 
-func _box(parent: Node3D, size: Vector3, offset: Vector3, color: Color, glow: bool = false, texture: Texture2D = null) -> MeshInstance3D:
-	var instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	instance.mesh = mesh
+func _material(color: Color, texture: Texture2D = null, glow: bool = false) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	if texture != null:
-		material.albedo_texture = texture
+	material.albedo_texture = texture
 	material.roughness = 0.9
 	if glow:
 		material.emission_enabled = true
 		material.emission = color
 		material.emission_energy_multiplier = 1.7
-	instance.material_override = material
-	instance.position = offset
-	parent.add_child(instance)
-	return instance
+	return material
 
 
-func _sphere(parent: Node3D, radius: float, offset: Vector3, color: Color) -> void:
-	var instance := MeshInstance3D.new()
+func _ellipsoid(parent: Node3D, label: String, offset: Vector3, size: Vector3, color: Color, glow: bool = false) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.name = label
 	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
+	mesh.radius = 1.0
+	mesh.height = 2.0
 	mesh.radial_segments = 10
 	mesh.rings = 5
-	instance.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.9
-	instance.material_override = material
-	instance.position = offset
-	parent.add_child(instance)
+	part.mesh = mesh
+	part.position = offset
+	part.scale = size
+	part.material_override = _material(color, null, glow)
+	parent.add_child(part)
+	return part
+
+
+func _loft(parent: Node3D, label: String, rings: Array[Vector4], color: Color, texture: Texture2D = null) -> MeshInstance3D:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sides := 8
+	for ring_id in range(rings.size() - 1):
+		for side in range(sides):
+			var a := _ring_point(rings[ring_id], side, sides)
+			var b := _ring_point(rings[ring_id], side + 1, sides)
+			var c := _ring_point(rings[ring_id + 1], side, sides)
+			var d := _ring_point(rings[ring_id + 1], side + 1, sides)
+			var u := float(side) / sides
+			var u_next := float(side + 1) / sides
+			var v := float(ring_id) / (rings.size() - 1)
+			var v_next := float(ring_id + 1) / (rings.size() - 1)
+			if rings[ring_id + 1].x > rings[ring_id].x:
+				_triangle(surface, a, b, c, Vector2(u, v), Vector2(u_next, v), Vector2(u, v_next))
+				_triangle(surface, b, d, c, Vector2(u_next, v), Vector2(u_next, v_next), Vector2(u, v_next))
+			else:
+				_triangle(surface, a, c, b, Vector2(u, v), Vector2(u, v_next), Vector2(u_next, v))
+				_triangle(surface, b, c, d, Vector2(u_next, v), Vector2(u, v_next), Vector2(u_next, v_next))
+	surface.generate_normals()
+	var part := MeshInstance3D.new()
+	part.name = label
+	part.mesh = surface.commit()
+	part.material_override = _material(color, texture)
+	parent.add_child(part)
+	return part
+
+
+func _ring_point(ring: Vector4, side: int, sides: int) -> Vector3:
+	var angle := TAU * float(side) / sides
+	return Vector3(cos(angle) * ring.y, ring.x, sin(angle) * ring.z + ring.w)
+
+
+func _polygon(parent: Node3D, label: String, points: Array[Vector3], color: Color) -> void:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(1, points.size() - 1):
+		_triangle(surface, points[0], points[i], points[i + 1], Vector2.ZERO, Vector2.ONE, Vector2(1.0, 0.0))
+	surface.generate_normals()
+	var part := MeshInstance3D.new()
+	part.name = label
+	part.mesh = surface.commit()
+	var material := _material(color)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	part.material_override = material
+	parent.add_child(part)
+
+
+func _triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, uv_a: Vector2, uv_b: Vector2, uv_c: Vector2) -> void:
+	surface.set_uv(uv_a)
+	surface.add_vertex(a)
+	surface.set_uv(uv_b)
+	surface.add_vertex(b)
+	surface.set_uv(uv_c)
+	surface.add_vertex(c)

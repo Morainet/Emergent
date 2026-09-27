@@ -14,6 +14,8 @@ const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
 const MOSS_BARK_TEXTURE = preload("res://assets/textures/moss_bark.png")
 const PINE_CANOPY_TEXTURE = preload("res://assets/textures/pine_canopy.png")
 const WOLF_MODEL = preload("res://scenes/wolf_avatar.tscn")
+const EXPLORER_MODEL = preload("res://scenes/explorer_avatar.tscn")
+const ARI_MODEL = preload("res://scenes/ari_avatar.tscn")
 const CROWN_RING_HEIGHTS = [-0.5, -0.36, -0.08, 0.22, 0.5]
 const CROWN_RING_RADII = [0.78, 1.0, 0.72, 0.42, 0.035]
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
@@ -720,8 +722,7 @@ func _make_player() -> void:
 	capsule.height = 1.8
 	shape.shape = capsule
 	player.add_child(shape)
-	player_visual = ExplorerAvatar.new()
-	player_visual.name = "ExplorerAvatar"
+	player_visual = EXPLORER_MODEL.instantiate()
 	player.add_child(player_visual)
 	pulse_ring = MeshInstance3D.new()
 	pulse_ring.name = "PulseRing"
@@ -752,11 +753,7 @@ func _make_ari() -> void:
 	capsule.height = 1.8
 	shape.shape = capsule
 	ari.add_child(shape)
-	ari_visual = ExplorerAvatar.new()
-	ari_visual.name = "AriAvatar"
-	ari_visual.jacket_color = Color("986e4e")
-	ari_visual.jacket_light_color = Color("b88960")
-	ari_visual.signal_color = Color("ffdb89")
+	ari_visual = ARI_MODEL.instantiate()
 	ari.add_child(ari_visual)
 	var marker := _box(ari, Vector3(0.22, 0.22, 0.22), Vector3(0.0, 1.35, 0.0), Color("ffdb89"), true)
 	marker.rotation.z = PI / 4.0
