@@ -12,6 +12,8 @@ const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 
 var player: CharacterBody3D
 var player_visual: ExplorerAvatar
+var pulse_ring: MeshInstance3D
+var pulse_ring_material: StandardMaterial3D
 var camera: Camera3D
 var camera_yaw := 0.0
 var camera_pitch := 0.53
@@ -50,6 +52,8 @@ var interaction_label: Label
 var message_label: Label
 var debug_label: Label
 var end_label: Label
+var pulse_label: Label
+var pulse_fill: ColorRect
 var shard_icons: Array[TextureRect] = []
 
 
@@ -103,6 +107,7 @@ func _physics_process(delta: float) -> void:
 	_update_daylight(delta)
 	_move_player(delta)
 	player_visual.animate(elapsed, Vector2(player.velocity.x, player.velocity.z).length(), pulse_visual / 0.4)
+	_update_pulse_effect()
 	_update_wolves(delta)
 	_animate_collectibles(delta)
 	_update_camera(delta)
@@ -312,6 +317,22 @@ func _make_player() -> void:
 	player_visual = ExplorerAvatar.new()
 	player_visual.name = "ExplorerAvatar"
 	player.add_child(player_visual)
+	pulse_ring = MeshInstance3D.new()
+	pulse_ring.name = "PulseRing"
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.88
+	ring_mesh.outer_radius = 1.0
+	ring_mesh.rings = 64
+	ring_mesh.ring_segments = 8
+	pulse_ring.mesh = ring_mesh
+	pulse_ring.position.y = -0.72
+	pulse_ring.visible = false
+	pulse_ring_material = StandardMaterial3D.new()
+	pulse_ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pulse_ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pulse_ring_material.albedo_color = Color(0.55, 1.0, 0.91, 0.7)
+	pulse_ring.material_override = pulse_ring_material
+	player.add_child(pulse_ring)
 
 
 func _make_wolves() -> void:
@@ -330,9 +351,12 @@ func _make_wolves() -> void:
 		_box(wolf, Vector3(0.76, 0.64, 0.65), Vector3(0.0, 0.2, -0.88), Color("879092"))
 		_cone(wolf, 0.24, 0.6, Vector3(-0.25, 0.7, -0.85), Color("7a8587"))
 		_cone(wolf, 0.24, 0.6, Vector3(0.25, 0.7, -0.85), Color("7a8587"))
-		_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(-0.2, 0.27, -1.22), Color("f59b85"), true)
-		_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(0.2, 0.27, -1.22), Color("f59b85"), true)
-		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0})
+		var eyes: Array[MeshInstance3D] = []
+		eyes.append(_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(-0.2, 0.27, -1.22), Color("d6b982"), true))
+		eyes.append(_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(0.2, 0.27, -1.22), Color("d6b982"), true))
+		var mood_marker := _box(wolf, Vector3(0.22, 0.22, 0.22), Vector3(0.0, 1.18, 0.0), Color("d6b982"), true)
+		mood_marker.rotation.z = PI / 4.0
+		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "eyes": eyes, "mood_marker": mood_marker})
 
 
 func _build_ui() -> void:
@@ -357,6 +381,21 @@ func _build_ui() -> void:
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		layer.add_child(icon)
 		shard_icons.append(icon)
+	var wolf_legend := _label(layer, Vector2(171, 131), Vector2(590, 25), 13, Color("d4dfd6"))
+	wolf_legend.text = "WOLF LIGHTS   red: hunt  ·  gold: watch  ·  blue: retreat  ·  cyan: stunned"
+	pulse_label = _label(layer, Vector2(775, 119), Vector2(200, 24), 15, Color("a8f0e5"))
+	var pulse_track := ColorRect.new()
+	pulse_track.color = Color(0.04, 0.15, 0.17, 0.85)
+	pulse_track.position = Vector2(778, 147)
+	pulse_track.size = Vector2(175, 8)
+	pulse_track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(pulse_track)
+	pulse_fill = ColorRect.new()
+	pulse_fill.color = Color("78e7d6")
+	pulse_fill.position = pulse_track.position
+	pulse_fill.size = pulse_track.size
+	pulse_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(pulse_fill)
 	interaction_label = _label(layer, Vector2(270, 492), Vector2(460, 33), 19, Color("fff2c5"))
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label = _label(layer, Vector2(200, 552), Vector2(600, 35), 18, Color("fff1c9"))
@@ -433,6 +472,7 @@ func _update_wolves(delta: float) -> void:
 			continue
 		wolf_data["stun"] = maxf(0.0, wolf_data["stun"] - delta)
 		wolf_data["attack"] = maxf(0.0, wolf_data["attack"] - delta)
+		_update_wolf_signal(wolf_data)
 		var to_player := player.global_position - wolf.global_position
 		var flat := Vector3(to_player.x, 0.0, to_player.z)
 		var distance := flat.length()
@@ -471,6 +511,38 @@ func _update_wolves(delta: float) -> void:
 			player_hp -= 13.0
 			pack_hunger = maxf(0.0, pack_hunger - 9.0)
 			_say("A wolf struck! Q repels the pack.")
+
+
+func _update_wolf_signal(wolf_data: Dictionary) -> void:
+	var color := _wolf_signal_color(pack_action, wolf_data["stun"] > 0.0)
+	for eye in wolf_data["eyes"]:
+		var material: StandardMaterial3D = eye.material_override
+		material.albedo_color = color
+		material.emission = color
+	var mood_marker: MeshInstance3D = wolf_data["mood_marker"]
+	var material: StandardMaterial3D = mood_marker.material_override
+	material.albedo_color = color
+	material.emission = color
+
+
+func _wolf_signal_color(action: String, stunned: bool) -> Color:
+	if stunned:
+		return Color("7eece2")
+	match action:
+		"hunt": return Color("ff806b")
+		"observe": return Color("f3c578")
+		"retreat": return Color("8fb7ef")
+		_: return Color("b9b6a4")
+
+
+func _update_pulse_effect() -> void:
+	pulse_ring.visible = pulse_visual > 0.0
+	if not pulse_ring.visible:
+		return
+	var progress := 1.0 - pulse_visual / 0.4
+	var radius := lerpf(0.35, 5.0, progress)
+	pulse_ring.scale = Vector3.ONE * radius
+	pulse_ring_material.albedo_color.a = 0.7 * (1.0 - progress)
 
 
 func _animate_collectibles(_delta: float) -> void:
@@ -527,6 +599,7 @@ func _pulse() -> void:
 		return
 	pulse_cooldown = 4.0
 	pulse_visual = 0.4
+	_update_pulse_effect()
 	var hit := 0
 	for wolf_data in wolves:
 		if wolf_data["hp"] <= 0:
@@ -663,6 +736,8 @@ func _update_ui() -> void:
 	objective_label.text = "Find three stones. Gather supplies; B builds a camp ward for two supplies."
 	for i in shard_icons.size():
 		shard_icons[i].modulate = Color.WHITE if i < collected else Color(0.7, 0.8, 0.78, 0.25)
+	pulse_label.text = "PULSE READY  ·  Q / LMB" if pulse_cooldown <= 0.0 else "PULSE  %.1f s" % pulse_cooldown
+	pulse_fill.size.x = 175.0 * (1.0 - pulse_cooldown / 4.0)
 	interaction_label.text = _nearby_interaction_text() if not game_over else ""
 	message_label.text = message if message_time > 0.0 else ""
 	debug_label.text = ("WOLVES: %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
