@@ -12,6 +12,8 @@ const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
 const MOSS_BARK_TEXTURE = preload("res://assets/textures/moss_bark.png")
 const PINE_CANOPY_TEXTURE = preload("res://assets/textures/pine_canopy.png")
+const CROWN_RING_HEIGHTS = [-0.5, -0.36, -0.08, 0.22, 0.5]
+const CROWN_RING_RADII = [0.78, 1.0, 0.72, 0.42, 0.035]
 const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 const SHARD_SITES = [Vector3(-21, 0, -21), Vector3(22, 0, -20), Vector3(19, 0, 21)]
 const WOLF_DENS = [Vector3(-22, 0, 12), Vector3(21, 0, -4), Vector3(10, 0, 25)]
@@ -303,7 +305,7 @@ func _make_forest() -> void:
 	for i in positions.size():
 		var p: Vector2 = positions[i]
 		forest_tree_positions.append(p)
-		var height := 3.0 + float(i % 3) * 0.7
+		var height := 2.9 + float((i * 7) % 5) * 0.43
 		_tree(Vector3(p.x, 0.0, p.y), height, i)
 
 
@@ -326,13 +328,30 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 	shape.height = height * 0.84
 	collision.shape = shape
 	trunk.add_child(collision)
+	for root in 3:
+		var root_angle := float(root) * TAU / 3.0 + float(index) * 0.61
+		var root_start := pos + Vector3(cos(root_angle) * 0.19, 0.52, sin(root_angle) * 0.19)
+		var root_tip := pos + Vector3(cos(root_angle) * 0.68, 0.09, sin(root_angle) * 0.68)
+		var root_mesh := CylinderMesh.new()
+		root_mesh.bottom_radius = 0.16
+		root_mesh.top_radius = 0.055
+		root_mesh.height = root_start.distance_to(root_tip)
+		root_mesh.radial_segments = 5
+		var root_visual := MeshInstance3D.new()
+		root_visual.mesh = root_mesh
+		root_visual.position = (root_start + root_tip) * 0.5
+		root_visual.quaternion = Quaternion(Vector3.UP, (root_tip - root_start).normalized())
+		root_visual.material_override = _textured_material(MOSS_BARK_TEXTURE)
+		add_child(root_visual)
 	var lean := Vector2(sin(float(index) * 2.7), cos(float(index) * 1.9)) * 0.24
-	for tier in 4:
-		var radius := (1.55 - float(tier) * 0.28) * (0.88 + 0.06 * float((index + tier) % 4))
-		var crown := _pine_crown(pos + Vector3(lean.x * float(tier) * 0.42, height - 0.15 + float(tier) * 0.82, lean.y * float(tier) * 0.42), radius, 2.2 - float(tier) * 0.16, index + tier)
+	var tier_count := 3 + index % 3
+	for tier in tier_count:
+		var radius := (1.55 - float(tier) * 0.24) * (0.88 + 0.06 * float((index + tier) % 4))
+		var crown := _pine_crown(pos + Vector3(lean.x * float(tier) * 0.42, height - 0.15 + float(tier) * 0.72, lean.y * float(tier) * 0.42), radius, 2.2 - float(tier) * 0.16, index * 11 + tier)
 		add_child(crown)
-	for branch in 5:
-		var angle := float(branch) * TAU / 5.0 + float(index) * 1.37
+	var branch_count := 4 + (index * 2) % 3
+	for branch in branch_count:
+		var angle := float(branch) * TAU / float(branch_count) + float(index) * 1.37
 		var start := pos + Vector3(0.0, height * (0.61 + float(branch % 3) * 0.11), 0.0)
 		var reach := 0.95 + 0.16 * float((index + branch) % 3)
 		var tip := start + Vector3(cos(angle) * reach, 0.28 + float(branch % 2) * 0.12, sin(angle) * reach)
@@ -347,24 +366,53 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 		branch_visual.quaternion = Quaternion(Vector3.UP, (tip - start).normalized())
 		branch_visual.material_override = _textured_material(MOSS_BARK_TEXTURE)
 		add_child(branch_visual)
-		add_child(_pine_crown(tip + Vector3(0.0, 0.34, 0.0), 0.55, 1.0, index + branch))
+		add_child(_pine_crown(tip + Vector3(0.0, 0.34, 0.0), 0.46 + 0.07 * float(branch % 3), 0.9 + 0.1 * float(branch % 2), index * 13 + branch))
 
 
 func _pine_crown(pos: Vector3, radius: float, height: float, variation: int) -> MeshInstance3D:
-	var mesh := CylinderMesh.new()
-	mesh.bottom_radius = radius
-	mesh.top_radius = 0.03
-	mesh.height = height
-	mesh.radial_segments = 7 + variation % 3
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sectors := 9 + variation % 3
+	for band in 4:
+		for sector in sectors:
+			var a := _crown_point(radius, height, band, sector, sectors, variation)
+			var b := _crown_point(radius, height, band, sector + 1, sectors, variation)
+			var c := _crown_point(radius, height, band + 1, sector, sectors, variation)
+			var d := _crown_point(radius, height, band + 1, sector + 1, sectors, variation)
+			_foliage_vertex(tool, a, Vector2(float(sector) / float(sectors), float(band) / 4.0))
+			_foliage_vertex(tool, c, Vector2(float(sector) / float(sectors), float(band + 1) / 4.0))
+			_foliage_vertex(tool, b, Vector2(float(sector + 1) / float(sectors), float(band) / 4.0))
+			_foliage_vertex(tool, b, Vector2(float(sector + 1) / float(sectors), float(band) / 4.0))
+			_foliage_vertex(tool, c, Vector2(float(sector) / float(sectors), float(band + 1) / 4.0))
+			_foliage_vertex(tool, d, Vector2(float(sector + 1) / float(sectors), float(band + 1) / 4.0))
+	for sector in sectors:
+		_foliage_vertex(tool, Vector3(0.0, -height * 0.44, 0.0), Vector2(0.5, 0.5))
+		_foliage_vertex(tool, _crown_point(radius, height, 0, sector + 1, sectors, variation), Vector2(1.0, 0.0))
+		_foliage_vertex(tool, _crown_point(radius, height, 0, sector, sectors, variation), Vector2(0.0, 0.0))
+	tool.generate_normals()
 	var crown := MeshInstance3D.new()
-	crown.mesh = mesh
+	crown.mesh = tool.commit()
 	crown.position = pos
 	crown.rotation.y = float(variation) * 0.71
 	crown.rotation.z = sin(float(variation) * 1.9) * 0.055
 	var material := _textured_material(PINE_CANOPY_TEXTURE)
 	material.albedo_color = Color(0.86, 0.95, 0.88) if variation % 3 == 0 else Color(1.0, 0.97, 0.91)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	crown.material_override = material
 	return crown
+
+
+func _crown_point(radius: float, height: float, ring: int, sector: int, sectors: int, variation: int) -> Vector3:
+	var angle := float(sector % sectors) * TAU / float(sectors)
+	var lobe := 1.0 + 0.13 * sin(angle * 3.0 + float(variation) * 1.71) + 0.07 * cos(angle * 5.0 + float(variation) * 0.83)
+	var hem := sin(angle * 4.0 + float(variation) * 0.57) * height * 0.075 if ring == 0 else 0.0
+	var shift := Vector2(sin(float(variation + ring) * 1.31), cos(float(variation - ring) * 1.19)) * radius * 0.055 * float(ring)
+	return Vector3(cos(angle) * radius * CROWN_RING_RADII[ring] * lobe + shift.x, height * CROWN_RING_HEIGHTS[ring] + hem, sin(angle) * radius * CROWN_RING_RADII[ring] * lobe + shift.y)
+
+
+func _foliage_vertex(tool: SurfaceTool, position: Vector3, uv: Vector2) -> void:
+	tool.set_uv(uv)
+	tool.add_vertex(position)
 
 
 func _make_ruins() -> void:

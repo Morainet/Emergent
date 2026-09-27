@@ -58,15 +58,21 @@ func _run() -> void:
 	assert(ground_mesh.material_override.albedo_texture != null, "Forest ground texture should load")
 	var textured_canopy_count := 0
 	var tapered_trunk_count := 0
+	var lowest_trunk := INF
+	var highest_trunk := 0.0
 	for world_child in game.get_children():
 		if world_child is MeshInstance3D and world_child.material_override.albedo_texture == load("res://assets/textures/pine_canopy.png"):
+			assert(world_child.mesh is ArrayMesh, "Foliage should use uneven generated geometry, not stock cones")
 			textured_canopy_count += 1
 		if world_child is StaticBody3D and world_child.get_child_count() > 0 and world_child.get_child(0) is MeshInstance3D:
 			var trunk_mesh = world_child.get_child(0).mesh
 			if trunk_mesh is CylinderMesh and trunk_mesh.bottom_radius > trunk_mesh.top_radius:
 				tapered_trunk_count += 1
+				lowest_trunk = minf(lowest_trunk, trunk_mesh.height)
+				highest_trunk = maxf(highest_trunk, trunk_mesh.height)
 	assert(textured_canopy_count >= 160, "Trees should have layered, textured crowns and side branches")
 	assert(tapered_trunk_count == 20, "Every tree should have a tapered trunk")
+	assert(highest_trunk - lowest_trunk > 1.2, "Tree heights should vary visibly")
 	var paths: Array = game.get("trail_paths")
 	var sites: Array = game.get_script().get_script_constant_map()["SHARD_SITES"]
 	var trees: Array = game.get("forest_tree_positions")
