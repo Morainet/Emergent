@@ -773,16 +773,10 @@ func _make_wolves() -> void:
 		capsule.height = 1.2
 		shape.shape = capsule
 		wolf.add_child(shape)
-		_box(wolf, Vector3(1.05, 0.8, 1.55), Vector3(0.0, 0.0, 0.0), Color("677479"))
-		_box(wolf, Vector3(0.76, 0.64, 0.65), Vector3(0.0, 0.2, -0.88), Color("879092"))
-		_cone(wolf, 0.24, 0.6, Vector3(-0.25, 0.7, -0.85), Color("7a8587"))
-		_cone(wolf, 0.24, 0.6, Vector3(0.25, 0.7, -0.85), Color("7a8587"))
-		var eyes: Array[MeshInstance3D] = []
-		eyes.append(_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(-0.2, 0.27, -1.22), Color("d6b982"), true))
-		eyes.append(_box(wolf, Vector3(0.18, 0.15, 0.12), Vector3(0.2, 0.27, -1.22), Color("d6b982"), true))
-		var mood_marker := _box(wolf, Vector3(0.22, 0.22, 0.22), Vector3(0.0, 1.18, 0.0), Color("d6b982"), true)
-		mood_marker.rotation.z = PI / 4.0
-		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "eyes": eyes, "mood_marker": mood_marker})
+		var visual := WolfAvatar.new()
+		visual.name = "WolfAvatar"
+		wolf.add_child(visual)
+		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "eyes": visual.eyes, "mood_marker": visual.mood_marker, "visual": visual})
 
 
 func _build_ui() -> void:
@@ -1117,8 +1111,11 @@ func _update_wolves(delta: float) -> void:
 		wolf.move_and_slide()
 		if direction.length() > 0.1:
 			wolf.rotation.y = lerp_angle(wolf.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 7.0))
+		var visual: WolfAvatar = wolf_data["visual"]
+		visual.animate(Vector2(wolf.velocity.x, wolf.velocity.z).length(), pack_action, wolf_data["stun"] > 0.0, delta)
 		if pack_action == "hunt" and distance < 1.7 and wolf_data["attack"] <= 0.0 and wolf_data["stun"] <= 0.0 and not (ward_built and target.global_position.distance_to(CAMP) < 9.0):
 			wolf_data["attack"] = 1.4
+			visual.play_attack()
 			if target == ari:
 				ari_hp = maxf(0.0, ari_hp - 13.0)
 				ari_visual.play_action("hurt")
@@ -1481,9 +1478,13 @@ func _new_night() -> void:
 	for wolf_data in wolves:
 		if wolf_data["hp"] <= 0:
 			wolf_data["hp"] = 3
+			wolf_data["stun"] = 0.0
+			wolf_data["attack"] = 0.0
 			var wolf: CharacterBody3D = wolf_data["node"]
 			wolf.position = wolf_data["home"] + Vector3(0.0, 0.62, 0.0)
 			wolf.visible = true
+			var visual: WolfAvatar = wolf_data["visual"]
+			visual.reset_pose()
 	_say("Night falls. The berry bushes regrow; the pack returns.")
 
 

@@ -197,6 +197,16 @@ func _run() -> void:
 	game.set("pack_fear", 0.0)
 	var wolves: Array = game.get("wolves")
 	var alpha_data: Dictionary = wolves[0]
+	var wolf_visual: WolfAvatar = alpha_data["visual"]
+	assert(wolf_visual.get_node("FrontLeftLeg") != null and wolf_visual.get_node("RearRightLeg") != null, "Wolf should have animated front and rear legs")
+	wolf_visual.animate(4.8, "hunt", false, 0.1)
+	assert(absf(wolf_visual.get_node("FrontLeftLeg").rotation.x) > 0.2, "Running wolf should have a clear gait")
+	wolf_visual.play_attack()
+	wolf_visual.animate(0.0, "hunt", false, 0.1)
+	wolf_visual.animate(0.0, "hunt", false, 0.1)
+	assert(wolf_visual.position.z < -0.1, "Attacking wolf should visibly lunge")
+	wolf_visual.reset_pose()
+	assert(is_zero_approx(wolf_visual.position.z) and is_zero_approx(wolf_visual.get_node("FrontLeftLeg").rotation.x), "Reset should clear the attack pose")
 	assert(game.call("_wolf_signal_color", "hunt", false) == Color("ff806b"), "Hunting wolves should show a red warning")
 	assert(game.call("_wolf_signal_color", "observe", false) == Color("f3c578"), "Watching wolves should show gold")
 	assert(game.call("_wolf_signal_color", "retreat", false) == Color("8fb7ef"), "Retreating wolves should show blue")
@@ -270,6 +280,10 @@ func _run() -> void:
 	assert(game.get("victory"), "Ari falling at camp must not block victory")
 	for wolf_data in wolves:
 		wolf_data["hp"] = 0
+		wolf_data["node"].visible = false
 	assert(game.call("_safe_pack_action", "hunt") == "roam", "A defeated wolf pack must not keep hunting")
-	print("SMOKE TEST PASSED: Ari companion, signal scanner, pulse feedback, wolf signals, avatar animation, textures, HUD icons, movement, collection, ward, victory, wolf decisions")
+	wolf_visual.play_attack()
+	game.call("_new_night")
+	assert(alpha_data["hp"] == 3 and alpha.visible and is_zero_approx(wolf_visual.attack_time), "Night respawn should restore the wolf and reset its animation")
+	print("SMOKE TEST PASSED: Ari companion, signal scanner, pulse feedback, wolf avatar, textures, HUD icons, movement, collection, ward, victory, wolf decisions")
 	quit(0)
