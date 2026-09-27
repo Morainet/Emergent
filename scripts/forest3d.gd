@@ -6,6 +6,9 @@ const WOLF_ACTIONS = ["hunt", "observe", "retreat", "roam"]
 const MAP_EDGE = 29.0
 const MOUSE_SENSITIVITY = 0.003
 const CAMERA_DISTANCE = 10.5
+const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
+const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
+const SIGNAL_SHARD_ICON = preload("res://assets/ui/signal_shard.png")
 
 var player: CharacterBody3D
 var camera: Camera3D
@@ -46,6 +49,7 @@ var interaction_label: Label
 var message_label: Label
 var debug_label: Label
 var end_label: Label
+var shard_icons: Array[TextureRect] = []
 
 
 func _ready() -> void:
@@ -191,7 +195,8 @@ func _make_ground() -> void:
 	var ground := StaticBody3D.new()
 	ground.position = Vector3(0.0, -0.5, 0.0)
 	add_child(ground)
-	_box(ground, Vector3(64.0, 1.0, 64.0), Vector3.ZERO, Color("315246"))
+	var surface := _box(ground, Vector3(64.0, 1.0, 64.0), Vector3.ZERO, Color.WHITE)
+	surface.material_override = _textured_material(FOREST_FLOOR_TEXTURE, Vector3(8.0, 8.0, 1.0))
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(64.0, 1.0, 64.0)
@@ -243,11 +248,11 @@ func _tree(pos: Vector3, height: float, index: int) -> void:
 func _make_ruins() -> void:
 	var stone := Color("778784")
 	for pos in [Vector3(20, 1.1, -17), Vector3(24, 1.1, -17), Vector3(20, 1.1, -22), Vector3(24, 1.1, -22)]:
-		_box(self, Vector3(1.1, 2.2, 1.1), pos, stone)
-	_box(self, Vector3(5.3, 0.6, 1.4), Vector3(22, 2.45, -17), stone.lightened(0.12))
-	_box(self, Vector3(7.0, 0.3, 7.0), Vector3(22, 0.15, -19.5), Color("60716c"))
+		_box(self, Vector3(1.1, 2.2, 1.1), pos, stone).material_override = _textured_material(RUIN_STONE_TEXTURE)
+	_box(self, Vector3(5.3, 0.6, 1.4), Vector3(22, 2.45, -17), stone.lightened(0.12)).material_override = _textured_material(RUIN_STONE_TEXTURE)
+	_box(self, Vector3(7.0, 0.3, 7.0), Vector3(22, 0.15, -19.5), Color("60716c")).material_override = _textured_material(RUIN_STONE_TEXTURE, Vector3(2.0, 2.0, 1.0))
 	for pos in [Vector3(-21, 0.5, -20), Vector3(-19, 0.5, -23), Vector3(-23, 0.5, -22)]:
-		_box(self, Vector3(1.5, 1.0, 1.5), pos, Color("647875"))
+		_box(self, Vector3(1.5, 1.0, 1.5), pos, Color("647875")).material_override = _textured_material(RUIN_STONE_TEXTURE)
 
 
 func _make_camp() -> void:
@@ -340,6 +345,16 @@ func _build_ui() -> void:
 	title_label = _label(layer, Vector2(25, 10), Vector2(500, 28), 21, Color("fce2a7"))
 	stats_label = _label(layer, Vector2(25, 47), Vector2(900, 26), 16, Color("d0e4db"))
 	objective_label = _label(layer, Vector2(25, 92), Vector2(900, 30), 17, Color("fce2a7"))
+	for i in 3:
+		var icon := TextureRect.new()
+		icon.texture = SIGNAL_SHARD_ICON
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.position = Vector2(25 + i * 42, 127)
+		icon.size = Vector2(34, 34)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(icon)
+		shard_icons.append(icon)
 	interaction_label = _label(layer, Vector2(270, 492), Vector2(460, 33), 19, Color("fff2c5"))
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label = _label(layer, Vector2(200, 552), Vector2(600, 35), 18, Color("fff1c9"))
@@ -644,6 +659,8 @@ func _update_ui() -> void:
 	title_label.text = "EMERGENT  /  THE LAST SIGNAL"
 	stats_label.text = "HEALTH %d     SUPPLIES %d     SIGNAL STONES %d / 3     %s" % [maxi(0, roundi(player_hp)), supplies, collected, "NIGHT" if _is_night() else "DAY"]
 	objective_label.text = "Find three stones. Gather supplies; B builds a camp ward for two supplies."
+	for i in shard_icons.size():
+		shard_icons[i].modulate = Color.WHITE if i < collected else Color(0.7, 0.8, 0.78, 0.25)
 	interaction_label.text = _nearby_interaction_text() if not game_over else ""
 	message_label.text = message if message_time > 0.0 else ""
 	debug_label.text = ("WOLVES: %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
@@ -679,6 +696,15 @@ func _material(color: Color, glow: bool = false) -> StandardMaterial3D:
 		mat.emission_enabled = true
 		mat.emission = color
 		mat.emission_energy_multiplier = 1.8
+	return mat
+
+
+func _textured_material(texture: Texture2D, uv_scale: Vector3 = Vector3.ONE) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = texture
+	mat.uv1_scale = uv_scale
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.roughness = 0.95
 	return mat
 
 
