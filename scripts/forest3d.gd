@@ -6,7 +6,7 @@ const WOLF_ACTIONS = ["hunt", "observe", "retreat", "roam"]
 const ARI_ACTIONS = ["hide", "gather", "explore", "defend", "return"]
 const MAP_EDGE = 29.0
 const MOUSE_SENSITIVITY = 0.003
-const CAMERA_DISTANCE = 10.5
+const CAMERA_DISTANCE = 7.8
 const PLAYER_SPEED = 7.0
 const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
@@ -41,7 +41,7 @@ var pulse_ring: MeshInstance3D
 var pulse_ring_material: StandardMaterial3D
 var camera: Camera3D
 var camera_yaw := 0.0
-var camera_pitch := 0.53
+var camera_pitch := 0.42
 var camera_distance := CAMERA_DISTANCE
 var camera_focus := Vector3.ZERO
 var camera_collision_shape: SphereShape3D
@@ -261,7 +261,7 @@ func _build_world() -> void:
 	camera.current = true
 	camera.position = Vector3(0.0, 7.0, 12.0)
 	add_child(camera)
-	camera_focus = player.global_position + Vector3(0.0, 1.15, 0.0)
+	camera_focus = player.global_position + Vector3(0.0, 0.55, 0.0)
 	camera_collision_shape = SphereShape3D.new()
 	camera_collision_shape.radius = 0.32
 	camera.look_at(camera_focus)
@@ -900,7 +900,7 @@ func _approach_horizontal_velocity(current: Vector2, target: Vector2, delta: flo
 
 func _update_camera(delta: float) -> void:
 	var right := Vector3(cos(camera_yaw), 0.0, -sin(camera_yaw))
-	var target_focus := player.global_position + Vector3(0.0, 1.15, 0.0) + right * 0.28
+	var target_focus := player.global_position + Vector3(0.0, 0.55, 0.0) + right * 0.28
 	camera_focus = camera_focus.lerp(target_focus, 1.0 - exp(-delta * 12.0))
 	var offset := Vector3(sin(camera_yaw) * cos(camera_pitch), sin(camera_pitch), cos(camera_yaw) * cos(camera_pitch)) * camera_distance
 	var desired := _camera_collision_position(camera_focus, camera_focus + offset)

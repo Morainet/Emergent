@@ -30,7 +30,7 @@ Ari 现在使用基于森林树干位置的轻量网格寻路，每隔约 0.6 �
 
 地图现在从营地空地分出三条可辨认的小径，分别通向石环遗址、符文门和孤立信标；狼的活动区有低矮的巢穴石和枯刺提示危险。小径是连续的弯曲地表网格，宽度有细微起伏，边缘渐隐并点缀草石；地面的矩形色块换成了贴地的苔藓斑。松树有锥度不同的树干、偏移的树冠和侧枝，继续使用项目内的苔藓树皮与针叶材质。林下还有蕨类、蘑菇、石群和碎石。主要路线与信号石附近保持开阔；新增大型道具目前是视觉装饰、没有碰撞体，Ari 的树干寻路与玩家移动规则不变。
 
-主角和 Ari 现分别使用 [`scenes/explorer_avatar.tscn`](scenes/explorer_avatar.tscn) 与 [`scenes/ari_avatar.tscn`](scenes/ari_avatar.tscn)：修长的锥形衣裤和靴子替代盒装身体，增加五官、立领、翻领、腰带、皮包与信号坠饰。主角保留青色旅行外套和蓬松短发；Ari 使用暖棕外套、围巾与游侠帽。动作由 `scripts/explorer_avatar.gd` 的四肢与头部节点驱动，包含抬脚步态、待机环顾、挎包和坠饰的轻微摆动，不需要骨骼动画。独立静态模型在 `assets/models/explorer_lowpoly.glb` 与 `assets/models/ari_lowpoly.glb`；修改脚本后运行 `godot --headless --path . --script res://tools/export_character_models.gd` 可重新导出。主角外观参考图及素材提示词见 [`assets/README.md`](assets/README.md)。
+主角和 Ari 现分别使用 [`scenes/explorer_avatar.tscn`](scenes/explorer_avatar.tscn) 与 [`scenes/ari_avatar.tscn`](scenes/ari_avatar.tscn)：修长的锥形衣裤和靴子替代盒装身体，增加五官、立领、翻领、腰带、皮包与信号坠饰。主角保留青色旅行外套、分片衣摆和层次短发；Ari 使用暖棕外套、围巾与游侠帽。动作由 `scripts/explorer_avatar.gd` 的四肢与头部节点驱动，包含抬脚步态、待机环顾、挎包和坠饰的轻微摆动，不需要骨骼动画。默认第三人称镜头已拉近、降低俯视角，仍可用滚轮拉远观察地图。独立静态模型在 `assets/models/explorer_lowpoly.glb` 与 `assets/models/ari_lowpoly.glb`；修改脚本后运行 `godot --headless --path . --script res://tools/export_character_models.gd` 可重新导出。主角外观参考图及素材提示词见 [`assets/README.md`](assets/README.md)。
 
 树冠已由标准圆锥换成自定义多环网格：轮廓有错落的下沿与不对称鼓起，树高、树冠层数和侧枝数量因树而异，树干底部也增加了少量根部形态。整体仍属于低多边形风格，并非扫描级写实树木。
 

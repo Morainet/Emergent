@@ -11,6 +11,8 @@ func _run() -> void:
 	game.set_physics_process(false)
 	await physics_frame
 	var player: CharacterBody3D = game.get("player")
+	assert(is_equal_approx(game.get("camera_distance"), 7.8), "Default camera should frame the explorer close enough to read")
+	assert(is_equal_approx(game.get("camera_pitch"), 0.42), "Default camera should not look down too steeply")
 	var ari: CharacterBody3D = game.get("ari")
 	assert(ari.name == "Ari" and ari.get_node("AriAvatar") != null, "Ari should spawn beside the camp")
 	assert(game.call("_local_ari_decision") == "explore", "Healthy Ari should guide exploration")
@@ -37,6 +39,7 @@ func _run() -> void:
 		assert((arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].x > 0.0, "%s should face outwards" % mesh_path)
 	assert(ari.get_node("AriAvatar/HeadPivot/HeadGeometry/CapCrown") != null and ari.get_node("AriAvatar/HeadPivot/HeadGeometry/Scarf") != null, "Ari should have a distinct ranger silhouette")
 	assert(avatar.get_node("HeadPivot/HeadGeometry/HairTuft") != null and avatar.get_node("SignalPendant") != null, "Explorer hair and signal pendant should be modelled")
+	assert(avatar.get_node("SplitCoatTail") != null and avatar.get_node("HeadPivot/HeadGeometry/HairLock") != null, "Third-person silhouette should have coat tails and layered hair")
 	assert(avatar.get_node("SignalPendant").scale.y < 0.1, "Signal pendant should keep its small modelled size after movement")
 	avatar.call("animate", 0.0, 0.0, 1.0)
 	assert(avatar.get_node("SignalPendant").scale.y < 0.16, "Pulse must enlarge the pendant only relative to its original size")
@@ -180,9 +183,10 @@ func _run() -> void:
 	assert(game.call("_camera_collision_position", Vector3(0.0, 2.0, 0.0), camera_clear_end).distance_to(camera_clear_end) < 0.01, "Clear camera paths should keep their full distance")
 	var motion := InputEventMouseMotion.new()
 	motion.relative = Vector2(100.0, -50.0)
+	var pitch_before_mouse: float = game.get("camera_pitch")
 	game.call("_unhandled_input", motion)
 	assert(game.get("camera_yaw") < -0.2, "Mouse movement should rotate the camera")
-	assert(game.get("camera_pitch") > 0.6, "Mouse movement should tilt the camera")
+	assert(game.get("camera_pitch") > pitch_before_mouse + 0.1, "Mouse movement should tilt the camera")
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
 	wheel.pressed = true

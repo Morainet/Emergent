@@ -116,6 +116,8 @@ func _build() -> void:
 		_ellipsoid(self, "CoatButton", Vector3(side * 0.175, -0.16, -0.225), Vector3(0.014, 0.014, 0.008), LEATHER)
 	_loft(self, "WaistBelt", [Vector4(-0.28, 0.315, 0.208, 0.0), Vector4(-0.34, 0.315, 0.208, 0.0)], LEATHER)
 	_ellipsoid(self, "Buckle", Vector3(0.0, -0.31, -0.213), Vector3(0.05, 0.035, 0.018), Color("c7a86c"))
+	for side in [-1.0, 1.0]:
+		_polygon(self, "SplitCoatTail", [Vector3(side * 0.02, -0.34, 0.199), Vector3(side * 0.28, -0.34, 0.185), Vector3(side * 0.31, -0.59, 0.224), Vector3(side * 0.035, -0.57, 0.225)], coat)
 
 	left_arm = _pivot("LeftArm", Vector3(-0.36, 0.285, 0.0))
 	right_arm = _pivot("RightArm", Vector3(0.36, 0.285, 0.0))
@@ -149,6 +151,8 @@ func _build() -> void:
 		_ellipsoid(head_geometry, "HairTop", Vector3(0.0, 0.84, 0.0), Vector3(0.24, 0.12, 0.205), HAIR)
 		for tuft in [Vector3(-0.15, 0.785, -0.16), Vector3(-0.02, 0.81, -0.18), Vector3(0.13, 0.78, -0.16)]:
 			_ellipsoid(head_geometry, "HairTuft", tuft, Vector3(0.095, 0.08, 0.09), HAIR)
+		for x in [-0.14, 0.0, 0.14]:
+			_polygon(head_geometry, "HairLock", [Vector3(x - 0.07, 0.80, 0.245), Vector3(x + 0.07, 0.80, 0.245), Vector3(x + 0.025, 0.60 + absf(x) * 0.28, 0.218)], Color("24282a"))
 
 	var front_strap := _loft(self, "FrontStrap", [Vector4(-0.32, 0.042, 0.022, -0.238), Vector4(0.34, 0.042, 0.022, -0.200)], LEATHER)
 	front_strap.rotation.z = -0.43
