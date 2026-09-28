@@ -59,6 +59,8 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 	if action_time > 0.0:
 		var phase := 1.0 - action_time / action_duration
 		var strength := sin(phase * PI)
+		rotation.x = 0.0
+		rotation.y = 0.0
 		match action_name:
 			"interact":
 				right_arm.rotation.x -= 1.15 * strength
@@ -71,9 +73,18 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 				left_arm.rotation.x += 0.7 * strength
 				right_arm.rotation.x += 0.7 * strength
 				rotation.x = -0.16 * strength
+			"attack":
+				right_arm.rotation.x -= 1.45 * strength
+				right_arm.rotation.z += 0.32 * strength
+				rotation.y = -0.20 * strength
+			"dodge":
+				left_arm.rotation.x += 0.55 * strength
+				right_arm.rotation.x += 0.55 * strength
+				rotation.x = 0.22 * strength
 		action_time = maxf(0.0, action_time - delta)
 	else:
 		rotation.x = 0.0
+		rotation.y = 0.0
 	if grounded and not was_grounded:
 		landing_time = 0.18
 	was_grounded = grounded
@@ -126,6 +137,11 @@ func _build() -> void:
 		_loft(arm, "RolledCuff", [Vector4(-0.43, 0.13, 0.13, 0.0), Vector4(-0.51, 0.12, 0.125, 0.0)], coat_light)
 		_ellipsoid(arm, "Hand", Vector3(0.0, -0.60, 0.0), Vector3(0.085, 0.135, 0.085), SKIN)
 		_ellipsoid(arm, "Thumb", Vector3(-0.075 if arm == left_arm else 0.075, -0.56, -0.045), Vector3(0.035, 0.07, 0.05), SKIN)
+	if not is_ari:
+		_loft(right_arm, "BladeGrip", [Vector4(-0.65, 0.043, 0.043, 0.0), Vector4(-0.74, 0.043, 0.043, 0.0)], LEATHER)
+		_loft(right_arm, "BladeGuard", [Vector4(-0.73, 0.105, 0.045, 0.0), Vector4(-0.77, 0.105, 0.045, 0.0)], Color("c4a576"))
+		var blade := _loft(right_arm, "SignalBlade", [Vector4(-0.75, 0.044, 0.035, 0.0), Vector4(-0.99, 0.06, 0.025, -0.025), Vector4(-1.10, 0.006, 0.006, -0.04)], accent)
+		blade.material_override = _material(accent, null, true)
 
 	head_pivot = _pivot("HeadPivot", Vector3(0.0, 0.45, 0.0))
 	var head_geometry := Node3D.new()

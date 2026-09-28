@@ -8,6 +8,8 @@ const MAP_EDGE = 29.0
 const MOUSE_SENSITIVITY = 0.003
 const CAMERA_DISTANCE = 7.8
 const PLAYER_SPEED = 7.0
+const MELEE_RANGE = 2.45
+const DODGE_SPEED = 12.5
 const FOREST_FLOOR_TEXTURE = preload("res://assets/textures/forest_floor.png")
 const RUIN_STONE_TEXTURE = preload("res://assets/textures/ruin_stone.png")
 const TRAIL_EARTH_TEXTURE = preload("res://assets/textures/trail_earth.png")
@@ -39,6 +41,8 @@ var ari_route_goal := Vector3.INF
 var ari_repath_time := 0.0
 var pulse_ring: MeshInstance3D
 var pulse_ring_material: StandardMaterial3D
+var melee_arc: MeshInstance3D
+var melee_arc_material: StandardMaterial3D
 var camera: Camera3D
 var camera_yaw := 0.0
 var camera_pitch := 0.42
@@ -66,6 +70,13 @@ var collected := 0
 var elapsed := 0.0
 var pulse_cooldown := 0.0
 var pulse_visual := 0.0
+var melee_cooldown := 0.0
+var melee_combo_window := 0.0
+var melee_combo := 0
+var melee_visual := 0.0
+var dodge_time := 0.0
+var dodge_cooldown := 0.0
+var dodge_direction := Vector3.ZERO
 var scan_time := 0.0
 var ai_timer := 0.0
 var ai_round := 0
@@ -92,6 +103,7 @@ var message_label: Label
 var debug_label: Label
 var end_label: Label
 var pulse_label: Label
+var combat_label: Label
 var ari_status_label: Label
 var pulse_fill: ColorRect
 var scan_panel: ColorRect
@@ -149,6 +161,10 @@ func _physics_process(delta: float) -> void:
 	ari_model_age = maxf(0.0, ari_model_age - delta)
 	pulse_cooldown = maxf(0.0, pulse_cooldown - delta)
 	pulse_visual = maxf(0.0, pulse_visual - delta)
+	melee_cooldown = maxf(0.0, melee_cooldown - delta)
+	melee_combo_window = maxf(0.0, melee_combo_window - delta)
+	melee_visual = maxf(0.0, melee_visual - delta)
+	dodge_cooldown = maxf(0.0, dodge_cooldown - delta)
 	scan_time = maxf(0.0, scan_time - delta)
 	message_time = maxf(0.0, message_time - delta)
 	if _is_night() and not was_night:
@@ -160,6 +176,7 @@ func _physics_process(delta: float) -> void:
 	player_step_phase += player_speed * delta * 1.6
 	player_visual.animate(elapsed, player_speed, pulse_visual / 0.4, player.velocity.y, player.is_on_floor(), delta, player_step_phase)
 	_update_pulse_effect()
+	_update_melee_effect()
 	_update_ari(delta)
 	_update_wolves(delta)
 	_animate_collectibles(delta)
@@ -196,7 +213,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if not game_over:
 			if button.button_index == MOUSE_BUTTON_LEFT:
-				_pulse()
+				_melee_attack()
 			elif button.button_index == MOUSE_BUTTON_RIGHT:
 				_interact()
 			_update_ui()
@@ -217,6 +234,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	match key.keycode:
 		KEY_E: _interact()
 		KEY_Q: _pulse()
+		KEY_SHIFT: _dodge()
 		KEY_B: _build_ward()
 		KEY_F1: show_debug = not show_debug
 		KEY_L:
@@ -740,6 +758,33 @@ func _make_player() -> void:
 	pulse_ring_material.albedo_color = Color(0.55, 1.0, 0.91, 0.7)
 	pulse_ring.material_override = pulse_ring_material
 	player.add_child(pulse_ring)
+	_make_melee_arc()
+
+
+func _make_melee_arc() -> void:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 12:
+		var a := lerpf(-0.77, 0.77, float(i) / 12.0)
+		var b := lerpf(-0.77, 0.77, float(i + 1) / 12.0)
+		var inner_a := Vector3(sin(a) * 0.65, -0.03, -cos(a) * 0.65)
+		var outer_a := Vector3(sin(a) * 2.28, -0.03, -cos(a) * 2.28)
+		var inner_b := Vector3(sin(b) * 0.65, -0.03, -cos(b) * 0.65)
+		var outer_b := Vector3(sin(b) * 2.28, -0.03, -cos(b) * 2.28)
+		for point in [inner_a, outer_a, inner_b, inner_b, outer_a, outer_b]:
+			tool.add_vertex(point)
+	tool.generate_normals()
+	melee_arc = MeshInstance3D.new()
+	melee_arc.name = "MeleeArc"
+	melee_arc.mesh = tool.commit()
+	melee_arc.visible = false
+	melee_arc_material = StandardMaterial3D.new()
+	melee_arc_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	melee_arc_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	melee_arc_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	melee_arc_material.albedo_color = Color(0.56, 1.0, 0.88, 0.0)
+	melee_arc.material_override = melee_arc_material
+	player.add_child(melee_arc)
 
 
 func _make_ari() -> void:
@@ -773,7 +818,7 @@ func _make_wolves() -> void:
 		wolf.add_child(shape)
 		var visual: WolfAvatar = WOLF_MODEL.instantiate()
 		wolf.add_child(visual)
-		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "eyes": visual.eyes, "mood_marker": visual.mood_marker, "visual": visual})
+		wolves.append({"node": wolf, "home": homes[i], "hp": 3, "stun": 0.0, "attack": 0.0, "windup": 0.0, "windup_target": null, "eyes": visual.eyes, "mood_marker": visual.mood_marker, "visual": visual})
 
 
 func _build_ui() -> void:
@@ -785,6 +830,12 @@ func _build_ui() -> void:
 	top.size = Vector2(1000, 83)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(top)
+	var quest_backdrop := ColorRect.new()
+	quest_backdrop.color = Color(0.035, 0.09, 0.10, 0.57)
+	quest_backdrop.position = Vector2(16, 87)
+	quest_backdrop.size = Vector2(968, 115)
+	quest_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(quest_backdrop)
 	title_label = _label(layer, Vector2(25, 10), Vector2(500, 28), 21, Color("fce2a7"))
 	ari_status_label = _label(layer, Vector2(650, 12), Vector2(325, 27), 16, Color("ffdb89"))
 	ari_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -803,6 +854,7 @@ func _build_ui() -> void:
 	var wolf_legend := _label(layer, Vector2(171, 131), Vector2(590, 25), 13, Color("d4dfd6"))
 	wolf_legend.text = "WOLF LIGHTS   red: hunt  ·  gold: watch  ·  blue: retreat  ·  cyan: stunned"
 	pulse_label = _label(layer, Vector2(775, 119), Vector2(200, 24), 15, Color("a8f0e5"))
+	combat_label = _label(layer, Vector2(25, 168), Vector2(300, 24), 14, Color("e2efcb"))
 	var pulse_track := ColorRect.new()
 	pulse_track.color = Color(0.04, 0.15, 0.17, 0.85)
 	pulse_track.position = Vector2(778, 147)
@@ -854,18 +906,18 @@ func _label(parent: Node, pos: Vector2, dimensions: Vector2, size: int, color: C
 
 
 func _move_player(delta: float) -> void:
-	var axis := Vector2.ZERO
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP): axis.y -= 1.0
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN): axis.y += 1.0
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): axis.x -= 1.0
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): axis.x += 1.0
-	axis = axis.normalized()
+	var axis := _movement_axis()
 	var move_direction := _movement_direction(axis, camera_yaw)
-	var horizontal := _approach_horizontal_velocity(Vector2(player.velocity.x, player.velocity.z), Vector2(move_direction.x, move_direction.z) * PLAYER_SPEED, delta, player.is_on_floor())
+	var horizontal := Vector2.ZERO
+	if dodge_time > 0.0:
+		horizontal = Vector2(dodge_direction.x, dodge_direction.z) * DODGE_SPEED
+		dodge_time = maxf(0.0, dodge_time - delta)
+	else:
+		horizontal = _approach_horizontal_velocity(Vector2(player.velocity.x, player.velocity.z), Vector2(move_direction.x, move_direction.z) * PLAYER_SPEED, delta, player.is_on_floor())
 	player.velocity.x = horizontal.x
 	player.velocity.z = horizontal.y
 	var grounded := player.is_on_floor()
-	if _should_jump(Input.is_key_pressed(KEY_SPACE), grounded, delta):
+	if dodge_time <= 0.0 and _should_jump(Input.is_key_pressed(KEY_SPACE), grounded, delta):
 		player.velocity.y = 8.2
 	elif not grounded:
 		player.velocity.y -= 22.0 * delta
@@ -876,6 +928,15 @@ func _move_player(delta: float) -> void:
 	player.move_and_slide()
 	player.position.x = clampf(player.position.x, -MAP_EDGE, MAP_EDGE)
 	player.position.z = clampf(player.position.z, -MAP_EDGE, MAP_EDGE)
+
+
+func _movement_axis() -> Vector2:
+	var axis := Vector2.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP): axis.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN): axis.y += 1.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): axis.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): axis.x += 1.0
+	return axis.normalized()
 
 
 func _should_jump(jump_down: bool, grounded: bool, delta: float) -> bool:
@@ -1071,6 +1132,13 @@ func _update_wolves(delta: float) -> void:
 			continue
 		wolf_data["stun"] = maxf(0.0, wolf_data["stun"] - delta)
 		wolf_data["attack"] = maxf(0.0, wolf_data["attack"] - delta)
+		if pack_action != "hunt" or wolf_data["stun"] > 0.0:
+			wolf_data["windup"] = 0.0
+			wolf_data["windup_target"] = null
+		elif wolf_data["windup"] > 0.0:
+			wolf_data["windup"] = maxf(0.0, wolf_data["windup"] - delta)
+			if wolf_data["windup"] <= 0.0:
+				_resolve_wolf_strike(wolf_data)
 		_update_wolf_signal(wolf_data)
 		var target: CharacterBody3D = player
 		if ari_hp > 0.0 and wolf.global_position.distance_to(ari.global_position) < wolf.global_position.distance_to(player.global_position):
@@ -1079,7 +1147,7 @@ func _update_wolves(delta: float) -> void:
 		var flat := Vector3(to_target.x, 0.0, to_target.z)
 		var distance := flat.length()
 		var direction := Vector3.ZERO
-		if wolf_data["stun"] <= 0.0:
+		if wolf_data["stun"] <= 0.0 and wolf_data["windup"] <= 0.0:
 			match pack_action:
 				"hunt":
 					if distance < (24.0 if _is_night() else 15.0): direction = flat.normalized()
@@ -1108,20 +1176,33 @@ func _update_wolves(delta: float) -> void:
 		wolf.move_and_slide()
 		if direction.length() > 0.1:
 			wolf.rotation.y = lerp_angle(wolf.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 7.0))
+		if pack_action == "hunt" and distance < 1.8 and wolf_data["attack"] <= 0.0 and wolf_data["stun"] <= 0.0 and wolf_data["windup"] <= 0.0 and not (ward_built and target.global_position.distance_to(CAMP) < 9.0):
+			wolf_data["windup"] = 0.55
+			wolf_data["windup_target"] = target
 		var visual: WolfAvatar = wolf_data["visual"]
-		visual.animate(Vector2(wolf.velocity.x, wolf.velocity.z).length(), pack_action, wolf_data["stun"] > 0.0, delta)
-		if pack_action == "hunt" and distance < 1.7 and wolf_data["attack"] <= 0.0 and wolf_data["stun"] <= 0.0 and not (ward_built and target.global_position.distance_to(CAMP) < 9.0):
-			wolf_data["attack"] = 1.4
-			visual.play_attack()
-			if target == ari:
-				ari_hp = maxf(0.0, ari_hp - 13.0)
-				ari_visual.play_action("hurt")
-				_say("A wolf struck Ari! Help her or drive it away.")
-			else:
-				player_hp -= 13.0
-				player_visual.play_action("hurt")
-				_say("A wolf struck! Q repels the pack.")
-			pack_hunger = maxf(0.0, pack_hunger - 9.0)
+		visual.animate(Vector2(wolf.velocity.x, wolf.velocity.z).length(), pack_action, wolf_data["stun"] > 0.0, delta, wolf_data["windup"] > 0.0)
+
+
+func _resolve_wolf_strike(wolf_data: Dictionary) -> void:
+	wolf_data["attack"] = 1.4
+	var visual: WolfAvatar = wolf_data["visual"]
+	visual.play_attack()
+	var wolf: CharacterBody3D = wolf_data["node"]
+	var target: CharacterBody3D = wolf_data["windup_target"]
+	wolf_data["windup_target"] = null
+	if target == null or target.global_position.distance_to(wolf.global_position) > 2.1 or (target == ari and ari_hp <= 0.0):
+		return
+	if target == ari:
+		ari_hp = maxf(0.0, ari_hp - 13.0)
+		ari_visual.play_action("hurt")
+		_say("A wolf struck Ari! Help her or drive it away.")
+	elif dodge_time > 0.0:
+		_say("You slipped past the wolf's attack.")
+	else:
+		player_hp = maxf(0.0, player_hp - 13.0)
+		player_visual.play_action("hurt")
+		_say("A wolf struck! Shift dodges the next lunge.")
+	pack_hunger = maxf(0.0, pack_hunger - 9.0)
 
 
 func _update_wolf_signal(wolf_data: Dictionary) -> void:
@@ -1154,6 +1235,72 @@ func _update_pulse_effect() -> void:
 	var radius := lerpf(0.35, 5.0, progress)
 	pulse_ring.scale = Vector3.ONE * radius
 	pulse_ring_material.albedo_color.a = 0.7 * (1.0 - progress)
+
+
+func _update_melee_effect() -> void:
+	melee_arc.visible = melee_visual > 0.0
+	if melee_arc.visible:
+		melee_arc_material.albedo_color = Color(0.56, 1.0, 0.88, 0.46 * melee_visual / 0.18)
+
+
+func _dodge() -> void:
+	if game_over or dodge_cooldown > 0.0 or dodge_time > 0.0:
+		return
+	var axis := _movement_axis()
+	if axis == Vector2.ZERO:
+		axis = Vector2(0.0, -1.0)
+	dodge_direction = _movement_direction(axis, camera_yaw)
+	dodge_time = 0.34
+	dodge_cooldown = 1.0
+	player_visual.play_action("dodge", 0.34)
+
+
+func _melee_attack() -> void:
+	if game_over or melee_cooldown > 0.0 or dodge_time > 0.0:
+		return
+	melee_combo = melee_combo % 3 + 1 if melee_combo_window > 0.0 else 1
+	melee_combo_window = 0.85 if melee_combo < 3 else 0.0
+	melee_cooldown = 0.31 if melee_combo < 3 else 0.52
+	melee_visual = 0.18
+	player.rotation.y = camera_yaw
+	player_visual.play_action("attack", 0.31)
+	_update_melee_effect()
+	var forward := Vector3(-sin(camera_yaw), 0.0, -cos(camera_yaw))
+	var closest: Dictionary = {}
+	var closest_distance := INF
+	for wolf_data in wolves:
+		if wolf_data["hp"] <= 0:
+			continue
+		var wolf: CharacterBody3D = wolf_data["node"]
+		var to_wolf := wolf.global_position - player.global_position
+		to_wolf.y = 0.0
+		var distance := to_wolf.length()
+		if distance > MELEE_RANGE or distance < 0.01 or forward.dot(to_wolf / distance) < 0.50:
+			continue
+		if melee_combo == 3:
+			_damage_wolf(wolf_data, 2, 0.65)
+		elif distance < closest_distance:
+			closest = wolf_data
+			closest_distance = distance
+	if melee_combo < 3 and not closest.is_empty():
+		_damage_wolf(closest, 1, 0.36)
+
+
+func _damage_wolf(wolf_data: Dictionary, damage: int, stun_duration: float) -> void:
+	if wolf_data["hp"] <= 0:
+		return
+	wolf_data["hp"] = maxi(0, int(wolf_data["hp"]) - damage)
+	wolf_data["stun"] = maxf(float(wolf_data["stun"]), stun_duration)
+	wolf_data["windup"] = 0.0
+	wolf_data["windup_target"] = null
+	wolf_data["attack"] = maxf(float(wolf_data["attack"]), 0.55)
+	var visual: WolfAvatar = wolf_data["visual"]
+	visual.play_hurt()
+	if wolf_data["hp"] <= 0:
+		var wolf: CharacterBody3D = wolf_data["node"]
+		wolf.visible = false
+		pack_fear = minf(100.0, pack_fear + 20.0)
+		_say("Wolf defeated. The pack pulls back.")
 
 
 func _animate_collectibles(_delta: float) -> void:
@@ -1219,7 +1366,7 @@ func _interact() -> void:
 
 
 func _pulse() -> void:
-	if pulse_cooldown > 0.0:
+	if pulse_cooldown > 0.0 or dodge_time > 0.0:
 		return
 	player_visual.play_action("pulse")
 	pulse_cooldown = 4.0
@@ -1232,13 +1379,12 @@ func _pulse() -> void:
 			continue
 		var wolf: CharacterBody3D = wolf_data["node"]
 		if wolf.global_position.distance_to(player.global_position) < 5.0:
-			wolf_data["hp"] -= 1
-			wolf_data["stun"] = 1.3
+			_damage_wolf(wolf_data, 1, 1.3)
 			wolf_data["attack"] = 1.2
 			var away := wolf.global_position - player.global_position
 			away.y = 0.0
-			wolf.global_position += away.normalized() * 2.0
-			if wolf_data["hp"] <= 0: wolf.visible = false
+			if wolf_data["hp"] > 0 and away.length() > 0.01:
+				wolf.global_position += away.normalized() * 2.0
 			hit += 1
 	if hit > 0:
 		pack_fear = minf(100.0, pack_fear + float(hit) * 28.0)
@@ -1477,6 +1623,8 @@ func _new_night() -> void:
 			wolf_data["hp"] = 3
 			wolf_data["stun"] = 0.0
 			wolf_data["attack"] = 0.0
+			wolf_data["windup"] = 0.0
+			wolf_data["windup_target"] = null
 			var wolf: CharacterBody3D = wolf_data["node"]
 			wolf.position = wolf_data["home"] + Vector3(0.0, 0.62, 0.0)
 			wolf.visible = true
@@ -1531,17 +1679,18 @@ func _update_ui() -> void:
 	ari_status_label.text = "ARI  %d HP  ·  %s" % [roundi(ari_hp), "DOWN" if ari_hp <= 0.0 else ari_action.to_upper()]
 	ari_status_label.modulate = Color("ff8d80") if ari_hp <= 0.0 else Color.WHITE
 	stats_label.text = "HEALTH %d     SUPPLIES %d     SIGNAL STONES %d / 3     %s" % [maxi(0, roundi(player_hp)), supplies, collected, "NIGHT" if _is_night() else "DAY"]
-	objective_label.text = "Find three stones. Q scans and repels; B builds a camp ward for two supplies."
+	objective_label.text = "Find three stones. Strike wolves, dodge their lunges, then scan the ruins."
 	for i in shard_icons.size():
 		shard_icons[i].modulate = Color.WHITE if i < collected else Color(0.7, 0.8, 0.78, 0.25)
-	pulse_label.text = "PULSE READY  ·  Q / LMB" if pulse_cooldown <= 0.0 else "PULSE  %.1f s" % pulse_cooldown
+	pulse_label.text = "PULSE READY  ·  Q" if pulse_cooldown <= 0.0 else "PULSE  %.1f s" % pulse_cooldown
 	pulse_fill.size.x = 175.0 * (1.0 - pulse_cooldown / 4.0)
+	combat_label.text = "BLADE %s  ·  DODGE %s" % ["COMBO %d/3" % melee_combo if melee_combo_window > 0.0 else "READY", "READY" if dodge_cooldown <= 0.0 else "%.1f s" % dodge_cooldown]
 	scan_panel.visible = scan_time > 0.0 and not game_over
 	if scan_panel.visible:
 		scan_label.text = _scan_text()
 	interaction_label.text = _nearby_interaction_text() if not game_over else ""
 	message_label.text = message if message_time > 0.0 else ""
-	debug_label.text = ("WOLVES %s [%s]  /  ARI %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, ari_action.to_upper(), ari_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB pulse  RMB interact  Space jump  B build  L Laya  F1 debug  Esc cursor"
+	debug_label.text = ("WOLVES %s [%s]  /  ARI %s [%s]  /  hunger %d  fear %d  /  Laya %s" % [pack_action.to_upper(), pack_source, ari_action.to_upper(), ari_source, roundi(pack_hunger), roundi(pack_fear), "ON" if use_laya else "OFF"]) if show_debug else "Mouse look  WASD move  LMB strike  Shift dodge  Q pulse  E / RMB use  Space jump  B build  L Laya  F1 debug"
 	end_label.text = ("THE SIGNAL IS ALIVE\nYou made it home. Press R to play again." if victory else "THE FOREST WINS\nPress R to try again.") if game_over else ""
 
 

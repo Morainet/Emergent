@@ -13,6 +13,7 @@ var tail: Node3D
 var legs: Array[Node3D] = []
 var gait_phase := 0.0
 var attack_time := 0.0
+var hurt_time := 0.0
 
 
 func _ready() -> void:
@@ -24,18 +25,24 @@ func play_attack() -> void:
 	attack_time = 0.38
 
 
+func play_hurt() -> void:
+	hurt_time = 0.25
+
+
 func reset_pose() -> void:
 	attack_time = 0.0
+	hurt_time = 0.0
 	gait_phase = 0.0
 	position = Vector3.ZERO
 	rotation = Vector3.ZERO
 	head.rotation = Vector3.ZERO
 	tail.rotation = Vector3.ZERO
+	mood_marker.scale = Vector3.ONE
 	for leg in legs:
 		leg.rotation = Vector3.ZERO
 
 
-func animate(horizontal_speed: float, action: String, stunned: bool, delta: float) -> void:
+func animate(horizontal_speed: float, action: String, stunned: bool, delta: float, winding_up: bool = false) -> void:
 	var pace := clampf(horizontal_speed / 4.8, 0.0, 1.0)
 	gait_phase += horizontal_speed * delta * 3.0
 	var step := sin(gait_phase) * 0.48 * pace
@@ -46,11 +53,21 @@ func animate(horizontal_speed: float, action: String, stunned: bool, delta: floa
 	position.z = 0.0
 	rotation.z = 0.0
 	var neck_target := -0.08 if action == "hunt" else 0.10 if action == "observe" else 0.04
+	mood_marker.scale = Vector3.ONE * (1.35 if winding_up else 1.0)
+	if winding_up:
+		neck_target = -0.26
+		rotation.x = -0.10
+	else:
+		rotation.x = 0.0
 	if stunned:
 		neck_target = 0.24
 		rotation.z = 0.12
 		for leg in legs:
 			leg.rotation.x *= 0.18
+	if hurt_time > 0.0:
+		rotation.z = 0.20 * sin(PI * hurt_time / 0.25)
+		neck_target = 0.22
+		hurt_time = maxf(0.0, hurt_time - delta)
 	if attack_time > 0.0:
 		var phase := 1.0 - attack_time / 0.38
 		var lunge := sin(phase * PI)

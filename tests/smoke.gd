@@ -41,6 +41,8 @@ func _run() -> void:
 	assert(avatar.get_node("HeadPivot/HeadGeometry/HairTuft") != null and avatar.get_node("SignalPendant") != null, "Explorer hair and signal pendant should be modelled")
 	assert(avatar.get_node("SplitCoatTail") != null and avatar.get_node("HeadPivot/HeadGeometry/HairLock") != null, "Third-person silhouette should have coat tails and layered hair")
 	assert(avatar.get_node("SignalPendant").scale.y < 0.1, "Signal pendant should keep its small modelled size after movement")
+	assert(avatar.get_node("RightArm/BladeGrip") != null and avatar.get_node("RightArm/SignalBlade") != null, "Explorer should carry the signal blade")
+	assert(game.get("melee_arc") is MeshInstance3D, "Melee strikes should have a visible sweep")
 	avatar.call("animate", 0.0, 0.0, 1.0)
 	assert(avatar.get_node("SignalPendant").scale.y < 0.16, "Pulse must enlarge the pendant only relative to its original size")
 	assert(ari.get_node("AriAvatar/SignalPendant").scale.y < 0.1, "Ari's pendant should also start at its modelled size")
@@ -68,6 +70,14 @@ func _run() -> void:
 	avatar.call("animate", 1.0, 0.0, 0.0, 0.0, true, 0.1)
 	avatar.call("animate", 1.1, 0.0, 0.0, 0.0, true, 0.1)
 	assert(avatar.get_node("LeftArm").rotation.x < -0.3, "Pulse should lift both arms")
+	avatar.call("play_action", "attack")
+	avatar.call("animate", 1.0, 0.0, 0.0, 0.0, true, 0.1)
+	avatar.call("animate", 1.1, 0.0, 0.0, 0.0, true, 0.1)
+	assert(avatar.get_node("RightArm").rotation.x < -0.3, "Melee should swing the blade arm")
+	avatar.call("play_action", "dodge")
+	avatar.call("animate", 1.0, 0.0, 0.0, 0.0, true, 0.1)
+	avatar.call("animate", 1.1, 0.0, 0.0, 0.0, true, 0.1)
+	assert(avatar.rotation.x > 0.1, "Dodge should visibly lean the explorer")
 	var player_jacket_textured := false
 	for part in avatar.get_children():
 		if part is MeshInstance3D and part.material_override.albedo_texture == load("res://assets/characters/explorer_canvas.png"):
@@ -283,10 +293,55 @@ func _run() -> void:
 	alpha.global_position = ari.global_position + Vector3(1.0, 0.0, 0.0)
 	alpha_data["attack"] = 0.0
 	alpha_data["stun"] = 0.0
+	alpha_data["windup"] = 0.0
 	player.global_position = Vector3(-20.0, 1.0, -20.0)
 	game.set("pack_action", "hunt")
 	game.call("_update_wolves", 0.016)
-	assert(game.get("ari_hp") == 87.0, "A wolf should be able to wound Ari")
+	assert(game.get("ari_hp") == 100.0 and alpha_data["windup"] > 0.0, "A wolf should telegraph its lunge before wounding Ari")
+	game.call("_update_wolves", 0.55)
+	assert(game.get("ari_hp") == 87.0, "A telegraphed wolf lunge should wound Ari")
+	alpha_data["hp"] = 3
+	alpha_data["stun"] = 0.0
+	alpha_data["windup"] = 0.0
+	alpha_data["attack"] = 0.0
+	player.global_position = Vector3(12.0, 1.0, 12.0)
+	game.set("camera_yaw", 0.0)
+	alpha.global_position = player.global_position + Vector3(0.0, 0.0, 1.7)
+	game.call("_melee_attack")
+	assert(alpha_data["hp"] == 3, "The blade must not hit a wolf behind the explorer")
+	game.set("melee_cooldown", 0.0)
+	game.set("melee_combo_window", 0.0)
+	alpha.global_position = player.global_position + Vector3(0.0, 0.0, -1.7)
+	game.call("_melee_attack")
+	assert(alpha_data["hp"] == 2 and game.get("melee_combo") == 1, "A frontal blade strike should begin a combo")
+	game.call("_melee_attack")
+	assert(alpha_data["hp"] == 2, "Strike cooldown should prevent duplicate hits")
+	game.set("melee_cooldown", 0.0)
+	game.call("_melee_attack")
+	assert(alpha_data["hp"] == 1 and game.get("melee_combo") == 2, "Second strike should continue the combo")
+	game.set("melee_cooldown", 0.0)
+	game.call("_melee_attack")
+	assert(alpha_data["hp"] == 0 and not alpha.visible and game.get("melee_combo") == 3, "Finisher should defeat the wolf")
+	alpha_data["hp"] = 3
+	alpha_data["stun"] = 0.0
+	alpha_data["attack"] = 0.0
+	alpha.visible = true
+	game.set("pack_fear", 0.0)
+	game.set("melee_cooldown", 0.0)
+	game.set("melee_combo_window", 0.0)
+	game.call("_dodge")
+	assert(game.get("dodge_time") > 0.0 and game.get("dodge_cooldown") > 0.0, "Dodge should start a short invulnerability window with cooldown")
+	alpha_data["windup_target"] = player
+	var hp_before_dodge: float = game.get("player_hp")
+	game.call("_resolve_wolf_strike", alpha_data)
+	assert(game.get("player_hp") == hp_before_dodge, "Dodge should evade a wolf lunge")
+	game.set("dodge_time", 0.0)
+	game.set("dodge_cooldown", 0.0)
+	alpha_data["windup_target"] = player
+	game.call("_resolve_wolf_strike", alpha_data)
+	assert(game.get("player_hp") < hp_before_dodge, "An undodged lunge should damage the player")
+	alpha_data["attack"] = 0.0
+	alpha_data["windup"] = 0.0
 	game.set("ari_hp", 0.0)
 	player.global_position = ari.global_position + Vector3(0.0, 0.0, 1.0)
 	game.call("_interact")
@@ -318,7 +373,7 @@ func _run() -> void:
 	wolf_visual.play_attack()
 	game.call("_new_night")
 	assert(alpha_data["hp"] == 3 and alpha.visible and is_zero_approx(wolf_visual.attack_time), "Night respawn should restore the wolf and reset its animation")
-	print("SMOKE TEST PASSED: Ari companion, signal scanner, pulse feedback, wolf avatar, textures, HUD icons, movement, collection, ward, victory, wolf decisions")
+	print("SMOKE TEST PASSED: companion, signal scanner, blade combo, dodge, telegraphed wolf lunge, wolf avatar, textures, HUD, movement, collection, ward, victory, decisions")
 	quit(0)
 
 
