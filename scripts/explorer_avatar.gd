@@ -15,6 +15,7 @@ var left_leg: Node3D
 var right_leg: Node3D
 var left_arm: Node3D
 var right_arm: Node3D
+var head_pivot: Node3D
 var pendant: MeshInstance3D
 var pendant_base_scale := Vector3.ONE
 var satchel: Node3D
@@ -42,8 +43,14 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 	var swing := sin(cadence) * 0.48 * stride
 	left_leg.rotation.x = swing
 	right_leg.rotation.x = -swing
+	left_leg.position.y = -0.28 + maxf(0.0, sin(cadence)) * 0.075 * stride
+	right_leg.position.y = -0.28 + maxf(0.0, -sin(cadence)) * 0.075 * stride
 	left_arm.rotation.x = -swing * 0.65
 	right_arm.rotation.x = swing * 0.65 - pulse * 1.4
+	left_arm.rotation.z = -0.08 + sin(cadence) * 0.025 * stride
+	right_arm.rotation.z = 0.08 + sin(cadence) * 0.025 * stride
+	head_pivot.rotation.y = sin(walk_time * 0.85) * (0.22 if character == "Ari" else 0.15) * (1.0 - stride) + sin(cadence) * 0.035 * stride
+	head_pivot.rotation.x = sin(walk_time * 1.7) * 0.025 * (1.0 - stride)
 	if not grounded:
 		left_leg.rotation.x = -0.25 if vertical_speed > 0.0 else 0.18
 		right_leg.rotation.x = 0.35 if vertical_speed > 0.0 else -0.12
@@ -74,8 +81,11 @@ func animate(walk_time: float, horizontal_speed: float, pulse: float, vertical_s
 	var squash := sin(PI * landing_time / 0.18) * 0.06
 	scale = Vector3(1.0 + squash * 0.5, 1.0 - squash, 1.0 + squash * 0.5)
 	position.y = absf(sin(cadence)) * 0.035 * stride + sin(walk_time * 2.2) * 0.008 * (1.0 - stride)
+	head_pivot.position.y = 0.45 + sin(walk_time * 2.2) * 0.006 * (1.0 - stride)
 	satchel.rotation.z = sin(cadence) * 0.08 * stride
+	satchel.rotation.x = -sin(cadence) * 0.055 * stride
 	pendant.scale = pendant_base_scale * (1.0 + pulse * 0.65)
+	pendant.rotation.z = PI / 4.0 + sin(cadence) * 0.055 * stride
 
 
 func _build() -> void:
@@ -115,25 +125,30 @@ func _build() -> void:
 		_ellipsoid(arm, "Hand", Vector3(0.0, -0.60, 0.0), Vector3(0.085, 0.135, 0.085), SKIN)
 		_ellipsoid(arm, "Thumb", Vector3(-0.075 if arm == left_arm else 0.075, -0.56, -0.045), Vector3(0.035, 0.07, 0.05), SKIN)
 
-	_loft(self, "Neck", [Vector4(0.33, 0.105, 0.105, 0.0), Vector4(0.49, 0.09, 0.09, 0.0)], SKIN)
-	_ellipsoid(self, "Head", Vector3(0.0, 0.655, -0.012), Vector3(0.215, 0.26, 0.205), SKIN)
-	_ellipsoid(self, "Jaw", Vector3(0.0, 0.535, -0.065), Vector3(0.155, 0.105, 0.155), SKIN)
+	head_pivot = _pivot("HeadPivot", Vector3(0.0, 0.45, 0.0))
+	var head_geometry := Node3D.new()
+	head_geometry.name = "HeadGeometry"
+	head_geometry.position.y = -0.45
+	head_pivot.add_child(head_geometry)
+	_loft(head_geometry, "Neck", [Vector4(0.33, 0.105, 0.105, 0.0), Vector4(0.49, 0.09, 0.09, 0.0)], SKIN)
+	_ellipsoid(head_geometry, "Head", Vector3(0.0, 0.655, -0.012), Vector3(0.215, 0.26, 0.205), SKIN)
+	_ellipsoid(head_geometry, "Jaw", Vector3(0.0, 0.535, -0.065), Vector3(0.155, 0.105, 0.155), SKIN)
 	for side in [-1.0, 1.0]:
-		_ellipsoid(self, "Ear", Vector3(side * 0.218, 0.635, -0.015), Vector3(0.045, 0.075, 0.045), SKIN)
-		_ellipsoid(self, "Eye", Vector3(side * 0.082, 0.682, -0.207), Vector3(0.018, 0.025, 0.009), Color("302b2a"))
-		_ellipsoid(self, "Brow", Vector3(side * 0.085, 0.724, -0.209), Vector3(0.07, 0.012, 0.015), HAIR)
-	_ellipsoid(self, "Nose", Vector3(0.0, 0.622, -0.216), Vector3(0.037, 0.067, 0.045), Color("c69070"))
-	_ellipsoid(self, "Mouth", Vector3(0.0, 0.540, -0.199), Vector3(0.055, 0.009, 0.006), Color("895d58"))
+		_ellipsoid(head_geometry, "Ear", Vector3(side * 0.218, 0.635, -0.015), Vector3(0.045, 0.075, 0.045), SKIN)
+		_ellipsoid(head_geometry, "Eye", Vector3(side * 0.082, 0.682, -0.207), Vector3(0.018, 0.025, 0.009), Color("302b2a"))
+		_ellipsoid(head_geometry, "Brow", Vector3(side * 0.085, 0.724, -0.209), Vector3(0.07, 0.012, 0.015), HAIR)
+	_ellipsoid(head_geometry, "Nose", Vector3(0.0, 0.622, -0.216), Vector3(0.037, 0.067, 0.045), Color("c69070"))
+	_ellipsoid(head_geometry, "Mouth", Vector3(0.0, 0.540, -0.199), Vector3(0.055, 0.009, 0.006), Color("895d58"))
 	if is_ari:
-		_loft(self, "Scarf", [Vector4(0.36, 0.165, 0.15, 0.0), Vector4(0.43, 0.15, 0.145, 0.0), Vector4(0.48, 0.11, 0.11, 0.0)], Color("58736c"))
-		_ellipsoid(self, "Hair", Vector3(0.0, 0.805, 0.02), Vector3(0.225, 0.125, 0.21), Color("4c3630"))
-		_ellipsoid(self, "CapCrown", Vector3(0.0, 0.845, 0.0), Vector3(0.255, 0.105, 0.22), coat)
-		_ellipsoid(self, "CapBrim", Vector3(0.0, 0.785, -0.175), Vector3(0.24, 0.025, 0.145), coat_light)
+		_loft(head_geometry, "Scarf", [Vector4(0.36, 0.165, 0.15, 0.0), Vector4(0.43, 0.15, 0.145, 0.0), Vector4(0.48, 0.11, 0.11, 0.0)], Color("58736c"))
+		_ellipsoid(head_geometry, "Hair", Vector3(0.0, 0.805, 0.02), Vector3(0.225, 0.125, 0.21), Color("4c3630"))
+		_ellipsoid(head_geometry, "CapCrown", Vector3(0.0, 0.845, 0.0), Vector3(0.255, 0.105, 0.22), coat)
+		_ellipsoid(head_geometry, "CapBrim", Vector3(0.0, 0.785, -0.175), Vector3(0.24, 0.025, 0.145), coat_light)
 	else:
-		_ellipsoid(self, "HairBack", Vector3(0.0, 0.79, 0.075), Vector3(0.23, 0.16, 0.17), HAIR)
-		_ellipsoid(self, "HairTop", Vector3(0.0, 0.84, 0.0), Vector3(0.24, 0.12, 0.205), HAIR)
+		_ellipsoid(head_geometry, "HairBack", Vector3(0.0, 0.79, 0.075), Vector3(0.23, 0.16, 0.17), HAIR)
+		_ellipsoid(head_geometry, "HairTop", Vector3(0.0, 0.84, 0.0), Vector3(0.24, 0.12, 0.205), HAIR)
 		for tuft in [Vector3(-0.15, 0.785, -0.16), Vector3(-0.02, 0.81, -0.18), Vector3(0.13, 0.78, -0.16)]:
-			_ellipsoid(self, "HairTuft", tuft, Vector3(0.095, 0.08, 0.09), HAIR)
+			_ellipsoid(head_geometry, "HairTuft", tuft, Vector3(0.095, 0.08, 0.09), HAIR)
 
 	var front_strap := _loft(self, "FrontStrap", [Vector4(-0.32, 0.042, 0.022, -0.238), Vector4(0.34, 0.042, 0.022, -0.200)], LEATHER)
 	front_strap.rotation.z = -0.43
